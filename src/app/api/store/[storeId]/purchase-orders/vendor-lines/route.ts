@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: { storeId: str
   if (!vendorId) return NextResponse.json({ error: "vendorId required" }, { status: 400 });
 
   const rows = await prisma.inventory.findMany({
-    where: { storeId, product: { vendorId } },
+    where: { storeId, product: { vendorId, active: true } },
     include: { product: { select: { id: true, name: true, upc: true, costPrice: true } } },
     orderBy: { product: { name: "asc" } },
   });

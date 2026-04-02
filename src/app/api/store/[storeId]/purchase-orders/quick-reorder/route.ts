@@ -19,7 +19,7 @@ export async function POST(_req: Request, { params }: { params: { storeId: strin
   if (!canViewPurchaseOrders(user, storeId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const invRows = await prisma.inventory.findMany({
-    where: { storeId },
+    where: { storeId, product: { active: true } },
     include: { product: true },
   });
 

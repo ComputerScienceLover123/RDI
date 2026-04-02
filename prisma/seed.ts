@@ -71,6 +71,8 @@ async function main() {
 
   // Clear business data first (FK order), then auth.
   await prisma.transactionLineItem.deleteMany();
+  await prisma.storeProductPriceOverride.deleteMany();
+  await prisma.productChangeLog.deleteMany();
   await prisma.posTransaction.deleteMany();
   await prisma.purchaseOrderLineItem.deleteMany();
   await prisma.purchaseOrder.deleteMany();

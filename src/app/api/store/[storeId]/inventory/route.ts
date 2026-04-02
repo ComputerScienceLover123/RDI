@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionClaims } from "@/lib/auth/session.server";
 import { canAccessStore } from "@/lib/store/storeAccess";
+import { getEffectiveRetailMap } from "@/lib/pricing/effectiveRetail";
 import type { Prisma, ProductCategory } from "@prisma/client";
 
 export const runtime = "nodejs";
@@ -90,15 +91,19 @@ export async function GET(req: NextRequest, { params }: { params: { storeId: str
     return NextResponse.json({ error: "Invalid sortBy" }, { status: 400 });
   }
 
-  const productWhere = buildProductWhere(q, category, vendorId);
+  const built = buildProductWhere(q, category, vendorId);
+  const productWhere: Prisma.ProductWhereInput =
+    Object.keys(built).length > 0 ? { AND: [built, { active: true }] } : { active: true };
 
-  const allStoreInventory = await prisma.inventory.findMany({ where: { storeId } });
+  const allStoreInventory = await prisma.inventory.findMany({
+    where: { storeId, product: { active: true } },
+  });
   const lowStockCountTotal = allStoreInventory.filter((r) => r.quantityOnHand <= r.minStockThreshold).length;
 
   let rows = await prisma.inventory.findMany({
     where: {
       storeId,
-      product: Object.keys(productWhere).length ? productWhere : undefined,
+      product: productWhere,
     },
     include: {
       product: {
@@ -111,9 +116,13 @@ export async function GET(req: NextRequest, { params }: { params: { storeId: str
     rows = rows.filter((r) => r.quantityOnHand <= r.minStockThreshold);
   }
 
+  const productIds = rows.map((r) => r.productId);
+  const effectiveRetail = await getEffectiveRetailMap(storeId, productIds);
+
   const dir = sortDir === "desc" ? -1 : 1;
   rows.sort((a, b) => {
     const cmp = (x: string | number, y: string | number) => (x < y ? -1 : x > y ? 1 : 0);
+    const effR = (row: (typeof rows)[0]) => effectiveRetail.get(row.productId) ?? row.product.retailPrice;
     switch (sortKey) {
       case "productName":
         return cmp(a.product.name.toLowerCase(), b.product.name.toLowerCase()) * dir;
@@ -126,7 +135,7 @@ export async function GET(req: NextRequest, { params }: { params: { storeId: str
       case "costPrice":
         return a.product.costPrice.comparedTo(b.product.costPrice) * dir;
       case "retailPrice":
-        return a.product.retailPrice.comparedTo(b.product.retailPrice) * dir;
+        return effR(a).comparedTo(effR(b)) * dir;
       case "quantityOnHand":
         return cmp(a.quantityOnHand, b.quantityOnHand) * dir;
       case "minStockThreshold":
@@ -156,20 +165,27 @@ export async function GET(req: NextRequest, { params }: { params: { storeId: str
 
   return NextResponse.json({
     store: { id: store.id, name: store.name },
-    rows: rows.map((r) => ({
-      inventoryId: r.id,
-      productId: r.productId,
-      productName: r.product.name,
-      upc: r.product.upc,
-      category: r.product.category,
-      vendorName: r.product.vendor.companyName,
-      vendorId: r.product.vendorId,
-      costPrice: r.product.costPrice.toString(),
-      retailPrice: r.product.retailPrice.toString(),
-      quantityOnHand: r.quantityOnHand,
-      minStockThreshold: r.minStockThreshold,
-      lastCountedAt: r.lastCountedAt?.toISOString() ?? null,
-    })),
+    rows: rows.map((r) => {
+      const master = r.product.retailPrice;
+      const eff = effectiveRetail.get(r.productId) ?? master;
+      const overridden = eff.toString() !== master.toString();
+      return {
+        inventoryId: r.id,
+        productId: r.productId,
+        productName: r.product.name,
+        upc: r.product.upc,
+        category: r.product.category,
+        vendorName: r.product.vendor.companyName,
+        vendorId: r.product.vendorId,
+        costPrice: r.product.costPrice.toString(),
+        retailPrice: eff.toString(),
+        masterRetailPrice: overridden ? master.toString() : undefined,
+        priceOverridden: overridden,
+        quantityOnHand: r.quantityOnHand,
+        minStockThreshold: r.minStockThreshold,
+        lastCountedAt: r.lastCountedAt?.toISOString() ?? null,
+      };
+    }),
     lowStockCount: lowStockCountTotal,
     vendors,
     categories,

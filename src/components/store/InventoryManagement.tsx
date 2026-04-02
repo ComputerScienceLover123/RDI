@@ -14,6 +14,8 @@ type InvRow = {
   vendorId: string;
   costPrice: string;
   retailPrice: string;
+  masterRetailPrice?: string;
+  priceOverridden?: boolean;
   quantityOnHand: number;
   minStockThreshold: number;
   lastCountedAt: string | null;
@@ -394,7 +396,14 @@ export default function InventoryManagement(props: {
                         <td style={{ padding: 10 }}>{r.category}</td>
                         <td style={{ padding: 10 }}>{r.vendorName}</td>
                         <td style={{ padding: 10 }}>${r.costPrice}</td>
-                        <td style={{ padding: 10 }}>${r.retailPrice}</td>
+                        <td style={{ padding: 10 }}>
+                          ${r.retailPrice}
+                          {r.priceOverridden ? (
+                            <span style={{ fontSize: 11, marginLeft: 4, color: "#2563eb" }} title="Store price override">
+                              *
+                            </span>
+                          ) : null}
+                        </td>
                         <td style={{ padding: 10, fontWeight: 600 }}>{r.quantityOnHand}</td>
                         <td style={{ padding: 10 }}>{r.minStockThreshold}</td>
                       </tr>
@@ -545,6 +554,8 @@ type DetailPayload = {
     active: boolean;
     costPrice: string;
     retailPrice: string;
+    masterRetailPrice?: string;
+    priceOverridden?: boolean;
     vendor: { companyName: string; contactEmail: string; paymentTerms: string };
   };
   inventory: { quantityOnHand: number; minStockThreshold: number; lastCountedAt: string | null };
@@ -595,6 +606,12 @@ function DetailBody({ data }: { data: DetailPayload }) {
         </p>
         <p style={{ margin: "4px 0 0" }}>
           Cost ${data.product.costPrice} · Retail ${data.product.retailPrice}
+          {data.product.priceOverridden && data.product.masterRetailPrice ? (
+            <span style={{ opacity: 0.85, fontSize: 12 }}>
+              {" "}
+              (chain ${data.product.masterRetailPrice})
+            </span>
+          ) : null}
         </p>
         <p style={{ margin: "4px 0 0" }}>
           On hand: <strong>{data.inventory.quantityOnHand}</strong> (min {data.inventory.minStockThreshold})

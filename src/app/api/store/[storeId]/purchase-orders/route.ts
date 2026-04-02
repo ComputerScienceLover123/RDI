@@ -125,6 +125,9 @@ export async function POST(req: NextRequest, { params }: { params: { storeId: st
     if (inv.product.vendorId !== body.vendorId) {
       return NextResponse.json({ error: "All products must belong to the selected vendor" }, { status: 400 });
     }
+    if (!inv.product.active) {
+      return NextResponse.json({ error: "Inactive products cannot be ordered" }, { status: 400 });
+    }
   }
 
   const now = new Date();

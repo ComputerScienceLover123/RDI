@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionClaims } from "@/lib/auth/session.server";
 import { canAccessStore } from "@/lib/store/storeAccess";
+import { getEffectiveRetailPrice } from "@/lib/pricing/effectiveRetail";
 
 export const runtime = "nodejs";
 
@@ -71,6 +72,10 @@ export async function GET(_req: Request, { params }: { params: { storeId: string
     }),
   ]);
 
+  const effectiveRetail = await getEffectiveRetailPrice(storeId, productId);
+  const masterRetail = inv.product.retailPrice;
+  const priceOverridden = effectiveRetail.toString() !== masterRetail.toString();
+
   const lineItems = lineItemsRaw
     .sort((a, b) => b.transaction.transactionAt.getTime() - a.transaction.transactionAt.getTime())
     .slice(0, 25);
@@ -89,7 +94,9 @@ export async function GET(_req: Request, { params }: { params: { storeId: string
       taxEligible: inv.product.taxEligible,
       active: inv.product.active,
       costPrice: inv.product.costPrice.toString(),
-      retailPrice: inv.product.retailPrice.toString(),
+      retailPrice: effectiveRetail.toString(),
+      masterRetailPrice: priceOverridden ? masterRetail.toString() : undefined,
+      priceOverridden,
       vendor: {
         id: inv.product.vendor.id,
         companyName: inv.product.vendor.companyName,

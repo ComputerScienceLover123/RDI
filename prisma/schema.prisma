@@ -95,6 +95,7 @@ model Store {
   auditLogs          AuditLog[]
   shrinkageRecords   ShrinkageRecord[]
   notifications      Notification[]
+  productPriceOverrides StoreProductPriceOverride[]
 }
 
 model User {
@@ -120,6 +121,7 @@ model User {
   auditLogs              AuditLog[]
   notifications          Notification[]           @relation("NotificationRecipient")
   notificationPreference UserNotificationPreference?
+  productChangeLogs      ProductChangeLog[]
 }
 
 model LoginAttempt {
@@ -176,8 +178,39 @@ model Product {
   purchaseOrderLineItems PurchaseOrderLineItem[]
   auditLogs              AuditLog[]
   shrinkageRecords       ShrinkageRecord[]
+  storePriceOverrides    StoreProductPriceOverride[]
+  changeLogs             ProductChangeLog[]
 
   @@index([vendorId])
+}
+
+/// Per-store retail price override; falls back to Product.retailPrice when absent.
+model StoreProductPriceOverride {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  retailPrice Decimal  @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([storeId, productId])
+  @@index([productId])
+}
+
+model ProductChangeLog {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  changedById String
+  changedBy   User     @relation(fields: [changedById], references: [id], onDelete: Cascade)
+  fieldKey    String
+  oldValue    String?  @db.Text
+  newValue    String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([productId, createdAt(sort: Desc)])
 }
 
 model Inventory {
