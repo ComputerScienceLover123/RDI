@@ -18,35 +18,96 @@ enum AccountStatus {
   disabled
 }
 
+enum ProductCategory {
+  tobacco
+  beverages
+  snacks
+  candy
+  grocery
+  foodservice
+  lottery
+  fuel
+  other
+}
+
+enum TransactionType {
+  sale
+  refund
+  void
+}
+
+enum PaymentMethod {
+  cash
+  credit
+  debit
+  mobile
+}
+
+enum PurchaseOrderStatus {
+  draft
+  submitted
+  received
+  cancelled
+}
+
+enum FuelGrade {
+  regular
+  midgrade
+  premium
+  diesel
+}
+
+enum ShrinkageCategory {
+  theft
+  damage
+  spoilage
+  vendor_error
+  unknown
+}
+
 model Store {
   id        String   @id
   name      String
   location  String?
   createdAt DateTime @default(now())
-  users     User[]
+  updatedAt DateTime @updatedAt
+
+  users              User[]
+  inventory          Inventory[]
+  posTransactions    PosTransaction[]
+  purchaseOrders     PurchaseOrder[]
+  fuelData           FuelData[]
+  auditLogs          AuditLog[]
+  shrinkageRecords   ShrinkageRecord[]
 }
 
 model User {
   id                   String        @id @default(cuid())
   email                String        @unique
-  passwordHash        String
-  firstName           String
-  lastName            String
+  passwordHash         String
+  firstName            String
+  lastName             String
   role                 UserRole
-  assignedStoreId     String?
-  assignedStore       Store?       @relation(fields: [assignedStoreId], references: [id])
-  accountStatus       AccountStatus @default(active)
-  mfaEnabled          Boolean       @default(false)
-  mfaSecret           String?       // TOTP secret (demo). Enable MFA to populate.
-  forcePasswordChange Boolean       @default(false)
-  createdAt           DateTime      @default(now())
-  lastLoginAt         DateTime?
-  loginAttempts       LoginAttempt[]
+  assignedStoreId      String?
+  assignedStore        Store?        @relation(fields: [assignedStoreId], references: [id])
+  accountStatus        AccountStatus @default(active)
+  mfaEnabled           Boolean       @default(false)
+  mfaSecret            String?
+  forcePasswordChange  Boolean       @default(false)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  lastLoginAt          DateTime?
+
+  loginAttempts          LoginAttempt[]
+  processedTransactions  PosTransaction[]   @relation("TransactionCashier")
+  orderedPurchaseOrders  PurchaseOrder[]    @relation("PurchaseOrderOrderedBy")
+  auditLogs              AuditLog[]
 }
 
 model LoginAttempt {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   userId    String?
   user      User?    @relation(fields: [userId], references: [id])
@@ -58,3 +119,199 @@ model LoginAttempt {
   @@index([createdAt])
 }
 
+model Vendor {
+  id             String   @id @default(cuid())
+  companyName    String
+  contactName    String
+  contactEmail   String
+  contactPhone   String
+  accountNumber  String
+  paymentTerms   String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
+
+  @@index([companyName])
+}
+
+model Product {
+  id           String          @id @default(cuid())
+  upc          String          @unique
+  name         String
+  description  String?
+  category     ProductCategory
+  brand        String?
+  vendorId     String
+  vendor       Vendor          @relation(fields: [vendorId], references: [id])
+  costPrice    Decimal         @db.Decimal(12, 2)
+  retailPrice  Decimal         @db.Decimal(12, 2)
+  taxEligible  Boolean         @default(true)
+  active       Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  inventory              Inventory[]
+  transactionLineItems   TransactionLineItem[]
+  purchaseOrderLineItems PurchaseOrderLineItem[]
+  auditLogs              AuditLog[]
+  shrinkageRecords       ShrinkageRecord[]
+
+  @@index([vendorId])
+}
+
+model Inventory {
+  id                 String    @id @default(cuid())
+  storeId            String
+  store              Store     @relation(fields: [storeId], references: [id])
+  productId          String
+  product            Product   @relation(fields: [productId], references: [id])
+  quantityOnHand     Int
+  minStockThreshold  Int
+  lastCountedAt      DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([storeId, productId])
+  @@index([storeId])
+  @@index([productId])
+}
+
+/// Point-of-sale transaction (maps to table `transactions`).
+model PosTransaction {
+  id                    String          @id @default(cuid())
+  storeId               String
+  store                 Store           @relation(fields: [storeId], references: [id])
+  terminalId            String
+  type                  TransactionType
+  subtotal              Decimal         @db.Decimal(12, 2)
+  taxAmount             Decimal         @db.Decimal(12, 2)
+  total                 Decimal         @db.Decimal(12, 2)
+  paymentMethod         PaymentMethod
+  verifoneReferenceId   String?         @unique
+  employeeId            String
+  employee              User            @relation("TransactionCashier", fields: [employeeId], references: [id])
+  transactionAt         DateTime
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  lineItems TransactionLineItem[]
+
+  @@index([storeId])
+  @@index([transactionAt])
+  @@map("transactions")
+}
+
+model TransactionLineItem {
+  id             String         @id @default(cuid())
+  transactionId  String
+  transaction    PosTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product        @relation(fields: [productId], references: [id])
+  quantity       Int
+  unitPrice      Decimal        @db.Decimal(12, 2)
+  lineTotal      Decimal        @db.Decimal(12, 2)
+  discountAmount Decimal        @default(0) @db.Decimal(12, 2)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([transactionId])
+  @@index([productId])
+}
+
+model PurchaseOrder {
+  id                   String               @id @default(cuid())
+  storeId              String
+  store                Store                @relation(fields: [storeId], references: [id])
+  vendorId             String
+  vendor               Vendor               @relation(fields: [vendorId], references: [id])
+  status               PurchaseOrderStatus
+  orderedByEmployeeId  String
+  orderedBy            User                 @relation("PurchaseOrderOrderedBy", fields: [orderedByEmployeeId], references: [id])
+  dateOrdered          DateTime
+  dateReceived         DateTime?
+  totalCost            Decimal              @db.Decimal(12, 2)
+  notes                String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  lineItems PurchaseOrderLineItem[]
+
+  @@index([storeId])
+  @@index([vendorId])
+}
+
+model PurchaseOrderLineItem {
+  id               String        @id @default(cuid())
+  purchaseOrderId  String
+  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product       @relation(fields: [productId], references: [id])
+  quantityOrdered  Int
+  quantityReceived Int
+  unitCost         Decimal       @db.Decimal(12, 2)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+}
+
+model FuelData {
+  id                         String    @id @default(cuid())
+  storeId                    String
+  store                      Store     @relation(fields: [storeId], references: [id])
+  tankNumber                 Int
+  grade                      FuelGrade
+  currentVolumeGallons       Decimal   @db.Decimal(12, 3)
+  tankCapacityGallons        Decimal   @db.Decimal(12, 3)
+  lastDeliveryDate           DateTime?
+  lastDeliveryVolumeGallons  Decimal?  @db.Decimal(12, 3)
+  currentRetailPricePerGallon Decimal  @db.Decimal(12, 3)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  @@unique([storeId, tankNumber])
+  @@index([storeId])
+}
+
+model AuditLog {
+  id                String   @id @default(cuid())
+  storeId           String
+  store             Store    @relation(fields: [storeId], references: [id])
+  employeeId        String
+  employee          User     @relation(fields: [employeeId], references: [id])
+  productId         String
+  product           Product  @relation(fields: [productId], references: [id])
+  systemQuantity    Int
+  countedQuantity   Int
+  discrepancyAmount Int
+  auditedAt         DateTime
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([storeId])
+  @@index([productId])
+  @@index([auditedAt])
+}
+
+model ShrinkageRecord {
+  id                  String             @id @default(cuid())
+  storeId             String
+  store               Store              @relation(fields: [storeId], references: [id])
+  productId           String
+  product             Product            @relation(fields: [productId], references: [id])
+  quantityLost        Int
+  estimatedLossValue  Decimal            @db.Decimal(12, 2)
+  periodStart         DateTime           @db.Date
+  periodEnd           DateTime           @db.Date
+  category            ShrinkageCategory
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([storeId])
+  @@index([productId])
+}
