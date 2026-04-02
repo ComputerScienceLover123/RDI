@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState } from "react";
 import type { UserRole } from "@prisma/client";
 import InventoryManagement from "@/components/store/InventoryManagement";
-import OrdersSection from "@/components/store/OrdersSection";
 
 type StoreOption = { id: string; name: string };
 
@@ -87,8 +86,26 @@ export default function StoreDashboard(props: {
         <InventoryManagement storeId={storeId} userRole={userRole} canAudit={canAudit} />
       ) : (
         <section>
-          <h2 style={{ marginTop: 0 }}>Ordering</h2>
-          <OrdersSection storeId={storeId} role={userRole} />
+          <h2 style={{ marginTop: 0 }}>Ordering &amp; receiving</h2>
+          <p style={{ opacity: 0.85, maxWidth: 560 }}>
+            Purchase orders: create vendor orders, quick-reorder low stock, track status, and receive deliveries into
+            inventory.
+          </p>
+          <Link
+            href={`/store/${encodeURIComponent(storeId)}/ordering`}
+            style={{
+              display: "inline-block",
+              marginTop: 12,
+              padding: "12px 20px",
+              background: "#2563eb",
+              color: "#fff",
+              borderRadius: 8,
+              textDecoration: "none",
+              fontWeight: 600,
+            }}
+          >
+            Open purchase orders
+          </Link>
         </section>
       )}
     </div>
