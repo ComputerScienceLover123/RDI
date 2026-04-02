@@ -21,8 +21,8 @@ export async function POST(req: NextRequest) {
   }
 
   const email = body?.email?.toLowerCase().trim();
-  const password = body?.password ?? "";
-  if (!email || typeof password !== "string") {
+  const password = typeof body?.password === "string" ? body.password.trim() : "";
+  if (!email || !password) {
     return NextResponse.json({ error: "Missing email or password" }, { status: 400 });
   }
 

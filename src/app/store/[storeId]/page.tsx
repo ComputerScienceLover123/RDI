@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerUser } from "@/lib/auth/serverUser";
-import InventorySection from "@/components/store/InventorySection";
-import OrdersSection from "@/components/store/OrdersSection";
 import { prisma } from "@/lib/prisma";
+import StoreDashboard from "@/components/store/StoreDashboard";
 
 export default async function StoreDetailPage({ params }: { params: { storeId: string } }) {
   const user = await getServerUser();
@@ -19,23 +18,20 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
   const store = await prisma.store.findUnique({ where: { id: storeId } });
   if (!store) redirect("/unauthorized");
 
+  const adminStores =
+    user.role === "admin"
+      ? await prisma.store.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
+      : [];
+
+  const canAudit = user.role === "admin" || user.role === "manager";
+
   return (
-    <main style={{ padding: 24, maxWidth: 980 }}>
-      <h1>{store.name}</h1>
-      <p style={{ opacity: 0.75 }}>
-        Store ID: <code>{store.id}</code> · Role: <code>{user.role}</code>
-      </p>
-
-      <section style={{ marginTop: 24 }}>
-        <h2>Inventory</h2>
-        <InventorySection storeId={store.id} role={user.role} />
-      </section>
-
-      <section style={{ marginTop: 24 }}>
-        <h2>Ordering</h2>
-        <OrdersSection storeId={store.id} role={user.role} />
-      </section>
-    </main>
+    <StoreDashboard
+      storeId={store.id}
+      storeName={store.name}
+      userRole={user.role}
+      canAudit={canAudit}
+      adminStores={adminStores}
+    />
   );
 }
-
