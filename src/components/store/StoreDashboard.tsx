@@ -15,7 +15,7 @@ export default function StoreDashboard(props: {
   adminStores: StoreOption[];
 }) {
   const { storeId, storeName, userRole, canAudit, adminStores } = props;
-  const [tab, setTab] = useState<"inventory" | "ordering">("inventory");
+  const [tab, setTab] = useState<"inventory" | "ordering" | "sales">("inventory");
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
@@ -80,11 +80,25 @@ export default function StoreDashboard(props: {
         >
           Ordering
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("sales")}
+          style={{
+            padding: "10px 16px",
+            border: "none",
+            background: tab === "sales" ? "#f4f4f5" : "transparent",
+            borderBottom: tab === "sales" ? "2px solid #2563eb" : "2px solid transparent",
+            cursor: "pointer",
+            fontWeight: tab === "sales" ? 600 : 400,
+          }}
+        >
+          Sales
+        </button>
       </div>
 
       {tab === "inventory" ? (
         <InventoryManagement storeId={storeId} userRole={userRole} canAudit={canAudit} />
-      ) : (
+      ) : tab === "ordering" ? (
         <section>
           <h2 style={{ marginTop: 0 }}>Ordering &amp; receiving</h2>
           <p style={{ opacity: 0.85, maxWidth: 560 }}>
@@ -105,6 +119,29 @@ export default function StoreDashboard(props: {
             }}
           >
             Open purchase orders
+          </Link>
+        </section>
+      ) : (
+        <section>
+          <h2 style={{ marginTop: 0 }}>Sales &amp; reporting</h2>
+          <p style={{ opacity: 0.85, maxWidth: 560 }}>
+            Dashboards, trends, category mix, hourly volume, and transaction log with filters. Managers and admins can
+            open line-item detail and export CSV; employees see summary views only.
+          </p>
+          <Link
+            href={`/store/${encodeURIComponent(storeId)}/sales`}
+            style={{
+              display: "inline-block",
+              marginTop: 12,
+              padding: "12px 20px",
+              background: "#2563eb",
+              color: "#fff",
+              borderRadius: 8,
+              textDecoration: "none",
+              fontWeight: 600,
+            }}
+          >
+            Open sales dashboard
           </Link>
         </section>
       )}

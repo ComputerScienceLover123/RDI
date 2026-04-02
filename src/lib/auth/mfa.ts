@@ -1,17 +1,16 @@
-import { authenticator } from "otplib";
+import { generateSecret, generateURI, verifySync } from "otplib";
 import { env } from "../env";
 
 export const mfaIssuer = env.JWT_ISSUER;
 
 export function generateTotpSecret(email: string) {
-  const secret = authenticator.generateSecret();
-  const otpauthUrl = authenticator.keyuri(email, mfaIssuer, secret);
+  const secret = generateSecret();
+  const otpauthUrl = generateURI({ issuer: mfaIssuer, label: email, secret });
   return { secret, otpauthUrl };
 }
 
 export function verifyTotpCode(secret: string, code: string) {
-  // otplib normalizes and validates length/time-step internally.
-  return authenticator.check(code, secret);
+  return verifySync({ secret, token: code }).valid;
 }
 
 export function normalizeTotpCode(input: string) {
