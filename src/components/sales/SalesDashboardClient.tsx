@@ -110,7 +110,7 @@ export default function SalesDashboardClient(props: { storeId: string; storeName
   const [hourly, setHourly] = useState<HourRow[]>([]);
   const [staff, setStaff] = useState<{ id: string; name: string }[]>([]);
 
-  const [txnType, setTxnType] = useState("all");
+  const [txnType, setTxnType] = useState<string>("all");
   const [txnPay, setTxnPay] = useState("all");
   const [txnEmployee, setTxnEmployee] = useState("all");
   const [txnQ, setTxnQ] = useState("");
@@ -172,7 +172,8 @@ export default function SalesDashboardClient(props: { storeId: string; storeName
   const loadTxns = useCallback(async () => {
     setTxnLoading(true);
     const q = new URLSearchParams({ from, to, page: String(txnPage) });
-    if (txnType !== "all") q.set("type", txnType);
+    if (txnType === "void_refund") q.set("types", "void,refund");
+    else if (txnType !== "all") q.set("type", txnType);
     if (txnPay !== "all") q.set("paymentMethod", txnPay);
     if (txnEmployee !== "all") q.set("employeeId", txnEmployee);
     if (txnQ.trim()) q.set("q", txnQ.trim());
@@ -187,6 +188,12 @@ export default function SalesDashboardClient(props: { storeId: string; storeName
     }
     setTxnLoading(false);
   }, [base, from, to, txnPage, txnType, txnPay, txnEmployee, txnQ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const focus = new URLSearchParams(window.location.search).get("focus");
+    if (focus === "void_refund") setTxnType("void_refund");
+  }, []);
 
   useEffect(() => {
     void loadSummary();
@@ -233,7 +240,8 @@ export default function SalesDashboardClient(props: { storeId: string; storeName
 
   const exportCsv = async () => {
     const q = new URLSearchParams({ from, to, format: "csv" });
-    if (txnType !== "all") q.set("type", txnType);
+    if (txnType === "void_refund") q.set("types", "void,refund");
+    else if (txnType !== "all") q.set("type", txnType);
     if (txnPay !== "all") q.set("paymentMethod", txnPay);
     if (txnEmployee !== "all") q.set("employeeId", txnEmployee);
     if (txnQ.trim()) q.set("q", txnQ.trim());
@@ -554,6 +562,7 @@ export default function SalesDashboardClient(props: { storeId: string; storeName
             <option value="sale">Sale</option>
             <option value="refund">Refund</option>
             <option value="void">Void</option>
+            <option value="void_refund">Voids &amp; refunds</option>
           </select>
           <select value={txnPay} onChange={(e) => setTxnPay(e.target.value)} style={inputStyle}>
             <option value="all">All payments</option>

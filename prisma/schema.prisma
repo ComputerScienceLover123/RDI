@@ -65,6 +65,21 @@ enum ShrinkageCategory {
   unknown
 }
 
+enum NotificationSeverity {
+  info
+  warning
+  critical
+}
+
+enum NotificationCategory {
+  low_stock
+  void_alert
+  delivery
+  audit
+  shrinkage
+  system
+}
+
 model Store {
   id        String   @id
   name      String
@@ -79,6 +94,7 @@ model Store {
   fuelData           FuelData[]
   auditLogs          AuditLog[]
   shrinkageRecords   ShrinkageRecord[]
+  notifications      Notification[]
 }
 
 model User {
@@ -102,6 +118,8 @@ model User {
   processedTransactions  PosTransaction[]   @relation("TransactionCashier")
   orderedPurchaseOrders  PurchaseOrder[]    @relation("PurchaseOrderOrderedBy")
   auditLogs              AuditLog[]
+  notifications          Notification[]           @relation("NotificationRecipient")
+  notificationPreference UserNotificationPreference?
 }
 
 model LoginAttempt {
@@ -314,4 +332,39 @@ model ShrinkageRecord {
 
   @@index([storeId])
   @@index([productId])
+}
+
+/// In-app alert for a specific user (per-user read state).
+model Notification {
+  id               String               @id @default(cuid())
+  storeId          String?
+  store            Store?               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  recipientUserId  String
+  recipient        User                 @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  title            String
+  description      String               @db.Text
+  severity         NotificationSeverity
+  category         NotificationCategory
+  linkUrl          String
+  read             Boolean              @default(false)
+  /// Idempotency key for automated checks; scoped per recipient in application logic.
+  dedupeKey        String?
+  createdAt        DateTime             @default(now())
+
+  @@index([recipientUserId, dedupeKey])
+  @@index([recipientUserId, read, createdAt(sort: Desc)])
+  @@index([storeId, createdAt])
+  @@index([createdAt])
+}
+
+model UserNotificationPreference {
+  userId        String  @id
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lowStock      Boolean @default(true)
+  voidAlert     Boolean @default(true)
+  delivery      Boolean @default(true)
+  auditReminder Boolean @default(true)
+  shrinkage     Boolean @default(true)
+  system        Boolean @default(true)
+  updatedAt     DateTime @updatedAt
 }

@@ -19,6 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: { storeId: str
   if ("error" in range) return NextResponse.json({ error: range.error }, { status: 400 });
 
   const typeFilter = sp.get("type");
+  const typesFilter = sp.get("types");
   const paymentFilter = sp.get("paymentMethod");
   const employeeId = sp.get("employeeId");
   const q = sp.get("q")?.trim();
@@ -34,7 +35,15 @@ export async function GET(req: NextRequest, { params }: { params: { storeId: str
     transactionAt: { gte: range.from, lte: range.to },
   };
 
-  if (typeFilter && typeFilter !== "all" && ["sale", "refund", "void"].includes(typeFilter)) {
+  if (typesFilter) {
+    const parts = typesFilter
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t): t is TransactionType => ["sale", "refund", "void"].includes(t));
+    if (parts.length > 0) {
+      where.type = parts.length === 1 ? parts[0]! : { in: parts };
+    }
+  } else if (typeFilter && typeFilter !== "all" && ["sale", "refund", "void"].includes(typeFilter)) {
     where.type = typeFilter as TransactionType;
   }
   if (paymentFilter && paymentFilter !== "all" && ["cash", "credit", "debit", "mobile"].includes(paymentFilter)) {

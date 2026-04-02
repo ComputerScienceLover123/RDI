@@ -13,7 +13,7 @@ const EnvSchema = z.object({
     .transform((v) => Number(v))
     .pipe(z.number().positive()),
   BCRYPT_SALT_ROUNDS: z.string().transform((v) => Number(v)).pipe(z.number().min(12)),
-  APP_BASE_URL: z.string().min(1).optional()
+  APP_BASE_URL: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
