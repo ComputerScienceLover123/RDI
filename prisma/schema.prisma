@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  manager
+  employee
+}
+
+enum AccountStatus {
+  active
+  disabled
+}
+
+model Store {
+  id        String   @id
+  name      String
+  location  String?
+  createdAt DateTime @default(now())
+  users     User[]
+}
+
+model User {
+  id                   String        @id @default(cuid())
+  email                String        @unique
+  passwordHash        String
+  firstName           String
+  lastName            String
+  role                 UserRole
+  assignedStoreId     String?
+  assignedStore       Store?       @relation(fields: [assignedStoreId], references: [id])
+  accountStatus       AccountStatus @default(active)
+  mfaEnabled          Boolean       @default(false)
+  mfaSecret           String?       // TOTP secret (demo). Enable MFA to populate.
+  forcePasswordChange Boolean       @default(false)
+  createdAt           DateTime      @default(now())
+  lastLoginAt         DateTime?
+  loginAttempts       LoginAttempt[]
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+
+  ipAddress String
+  mfaUsed   Boolean
+  success   Boolean
+
+  @@index([createdAt])
+}
+
