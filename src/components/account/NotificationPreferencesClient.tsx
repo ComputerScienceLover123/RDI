@@ -9,6 +9,7 @@ type Prefs = {
   auditReminder: boolean;
   shrinkage: boolean;
   system: boolean;
+  fuelTank: boolean;
 };
 
 const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
@@ -17,6 +18,7 @@ const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
   { key: "delivery", label: "Delivery / purchase orders", hint: "Submitted POs waiting to be received." },
   { key: "auditReminder", label: "Inventory audit reminders", hint: "Stores with no recent audit activity." },
   { key: "shrinkage", label: "Shrinkage ratio", hint: "Shrinkage high relative to units sold." },
+  { key: "fuelTank", label: "Fuel tank levels", hint: "When underground tanks drop below 25% (warning) or 15% (critical)." },
   { key: "system", label: "System", hint: "General system messages." },
 ];
 
@@ -28,7 +30,7 @@ export default function NotificationPreferencesClient() {
     void fetch("/api/user/notification-preferences", { credentials: "include" })
       .then((r) => r.json())
       .then((j) => {
-        if (j.lowStock !== undefined) setPrefs(j);
+        if (j && typeof j.lowStock === "boolean") setPrefs(j);
       });
   }, []);
 

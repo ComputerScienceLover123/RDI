@@ -14,6 +14,7 @@ const PatchSchema = z
     auditReminder: z.boolean().optional(),
     shrinkage: z.boolean().optional(),
     system: z.boolean().optional(),
+    fuelTank: z.boolean().optional(),
   })
   .strict();
 
@@ -34,6 +35,7 @@ export async function GET() {
     auditReminder: prefs.auditReminder,
     shrinkage: prefs.shrinkage,
     system: prefs.system,
+    fuelTank: prefs.fuelTank,
   });
 }
 
@@ -65,5 +67,6 @@ export async function PATCH(req: NextRequest) {
     auditReminder: prefs.auditReminder,
     shrinkage: prefs.shrinkage,
     system: prefs.system,
+    fuelTank: prefs.fuelTank,
   });
 }

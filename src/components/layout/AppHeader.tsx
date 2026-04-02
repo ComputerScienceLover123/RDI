@@ -250,6 +250,9 @@ export default function AppHeader({ user }: { user: HeaderUser }) {
             <Link href="/admin/pricebook" style={{ color: "#2563eb", fontSize: 14 }}>
               Pricebook
             </Link>
+            <Link href="/admin/fuel" style={{ color: "#2563eb", fontSize: 14 }}>
+              Fuel (all stores)
+            </Link>
           </>
         ) : null}
         <Link href="/account/notifications" style={{ color: "#2563eb", fontSize: 14 }}>

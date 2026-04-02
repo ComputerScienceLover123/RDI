@@ -78,6 +78,7 @@ enum NotificationCategory {
   audit
   shrinkage
   system
+  fuel_tank
 }
 
 model Store {
@@ -98,6 +99,7 @@ model Store {
   productPriceOverrides StoreProductPriceOverride[]
   shifts             Shift[]
   shiftTemplates     ShiftTemplate[]
+  fuelDeliveries     FuelDelivery[]
 }
 
 model User {
@@ -127,6 +129,8 @@ model User {
   shiftsAsEmployee       Shift[]                  @relation("ShiftEmployee")
   shiftsCreated          Shift[]                  @relation("ShiftCreatedBy")
   shiftTemplatesCreated  ShiftTemplate[]
+  fuelDeliveriesLogged   FuelDelivery[]         @relation("FuelDeliveryLogger")
+  fuelPriceChanges       FuelPriceHistory[]
 }
 
 /// One scheduled work block per employee per calendar day at a store (start/end as minutes from midnight; if end <= start, shift crosses midnight).
@@ -367,8 +371,56 @@ model FuelData {
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
 
+  deliveries     FuelDelivery[]
+  priceHistory   FuelPriceHistory[]
+  dailySnapshots FuelDailyVolumeSnapshot[]
+
   @@unique([storeId, tankNumber])
   @@index([storeId])
+}
+
+model FuelDelivery {
+  id            String   @id @default(cuid())
+  storeId       String
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  fuelDataId    String
+  tank          FuelData @relation(fields: [fuelDataId], references: [id], onDelete: Cascade)
+  volumeGallons Decimal  @db.Decimal(12, 3)
+  deliveryDate  DateTime @db.Date
+  notes         String?  @db.Text
+  loggedById    String
+  loggedBy      User     @relation("FuelDeliveryLogger", fields: [loggedById], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([storeId, deliveryDate(sort: Desc)])
+  @@index([fuelDataId])
+}
+
+model FuelPriceHistory {
+  id                String   @id @default(cuid())
+  fuelDataId        String
+  tank              FuelData @relation(fields: [fuelDataId], references: [id], onDelete: Cascade)
+  oldPricePerGallon Decimal  @db.Decimal(12, 3)
+  newPricePerGallon Decimal  @db.Decimal(12, 3)
+  changedById       String
+  changedBy         User     @relation(fields: [changedById], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+
+  @@index([fuelDataId, createdAt(sort: Desc)])
+}
+
+/// End-of-day style reading per tank for sales estimates (updated when the fuel dashboard is loaded or after deliveries).
+model FuelDailyVolumeSnapshot {
+  id            String   @id @default(cuid())
+  fuelDataId    String
+  tank          FuelData @relation(fields: [fuelDataId], references: [id], onDelete: Cascade)
+  snapshotDate  DateTime @db.Date
+  volumeGallons Decimal  @db.Decimal(12, 3)
+  createdAt     DateTime @default(now())
+
+  @@unique([fuelDataId, snapshotDate])
+  @@index([snapshotDate])
 }
 
 model AuditLog {
@@ -442,5 +494,6 @@ model UserNotificationPreference {
   auditReminder Boolean @default(true)
   shrinkage     Boolean @default(true)
   system        Boolean @default(true)
+  fuelTank      Boolean @default(true)
   updatedAt     DateTime @updatedAt
 }

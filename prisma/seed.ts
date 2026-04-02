@@ -41,6 +41,21 @@ function randomPastDateWithinDays(days: number): Date {
   return new Date(now - ms);
 }
 
+function utcNoonFromYmdSeed(ymd: string): Date {
+  const parts = ymd.split("-").map(Number);
+  const y = parts[0]!;
+  const mo = parts[1]!;
+  const day = parts[2]!;
+  return new Date(Date.UTC(y, mo - 1, day, 12, 0, 0, 0));
+}
+
+function formatLocalYmdFromDate(dt: Date): string {
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const day = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 const CATEGORIES: ProductCategory[] = [
   ProductCategory.tobacco,
   ProductCategory.beverages,
@@ -77,6 +92,9 @@ async function main() {
   await prisma.purchaseOrderLineItem.deleteMany();
   await prisma.purchaseOrder.deleteMany();
   await prisma.inventory.deleteMany();
+  await prisma.fuelDelivery.deleteMany();
+  await prisma.fuelPriceHistory.deleteMany();
+  await prisma.fuelDailyVolumeSnapshot.deleteMany();
   await prisma.fuelData.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.shrinkageRecord.deleteMany();
@@ -245,6 +263,53 @@ async function main() {
         },
       });
     }
+  }
+
+  // --- Fuel volume snapshots (14 days) for sales trend chart + sample delivery rows ---
+  const tanksForTrend = await prisma.fuelData.findMany();
+  const seedNow = new Date();
+  for (const tank of tanksForTrend) {
+    const base = Number(tank.currentVolumeGallons);
+    const capN = Number(tank.tankCapacityGallons);
+    const drift = 30 + (tank.tankNumber % 4) * 12;
+    for (let i = 13; i >= 0; i--) {
+      const dayRef = new Date(seedNow);
+      dayRef.setDate(dayRef.getDate() - i);
+      const ymd = formatLocalYmdFromDate(dayRef);
+      const volN = Math.min(capN * 0.97, base + (13 - i) * drift);
+      const sd = utcNoonFromYmdSeed(ymd);
+      await prisma.fuelDailyVolumeSnapshot.upsert({
+        where: { fuelDataId_snapshotDate: { fuelDataId: tank.id, snapshotDate: sd } },
+        create: { fuelDataId: tank.id, snapshotDate: sd, volumeGallons: d(volN) },
+        update: { volumeGallons: d(volN) },
+      });
+    }
+  }
+
+  for (const store of stores) {
+    const logger = await prisma.user.findFirst({
+      where: {
+        assignedStoreId: store.id,
+        accountStatus: AccountStatus.active,
+        role: { in: [UserRole.manager, UserRole.employee] },
+      },
+    });
+    if (!logger) continue;
+    const stTanks = await prisma.fuelData.findMany({ where: { storeId: store.id }, orderBy: { tankNumber: "asc" } });
+    const primary = stTanks[0];
+    if (!primary) continue;
+    const delDay = new Date(seedNow);
+    delDay.setDate(delDay.getDate() - 4);
+    await prisma.fuelDelivery.create({
+      data: {
+        storeId: store.id,
+        fuelDataId: primary.id,
+        volumeGallons: d(4200),
+        deliveryDate: utcNoonFromYmdSeed(formatLocalYmdFromDate(delDay)),
+        notes: "Seeded wholesale delivery",
+        loggedById: logger.id,
+      },
+    });
   }
 
   // --- 100 transactions + line items (last 30 days) ---

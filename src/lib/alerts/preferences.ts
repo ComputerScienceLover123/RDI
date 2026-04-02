@@ -28,6 +28,8 @@ export function categoryAllowedByPreference(
       return prefs.shrinkage;
     case "system":
       return prefs.system;
+    case "fuel_tank":
+      return prefs.fuelTank;
     default:
       return true;
   }

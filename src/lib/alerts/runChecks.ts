@@ -261,6 +261,51 @@ async function checkShrinkageRatio(log: string[]): Promise<number> {
   return n;
 }
 
+async function checkFuelTankLevels(log: string[]): Promise<number> {
+  let n = 0;
+  const tanks = await prisma.fuelData.findMany({
+    include: { store: { select: { name: true } } },
+  });
+  const todayYmd = formatLocalYMD(new Date());
+
+  for (const t of tanks) {
+    const cap = Number(t.tankCapacityGallons);
+    const vol = Number(t.currentVolumeGallons);
+    if (cap <= 0) continue;
+    const pct = (vol / cap) * 100;
+    const recipients = await getManagerAdminUserIdsForStore(t.storeId);
+    if (recipients.length === 0) continue;
+
+    if (pct < 15) {
+      const created = await notifyUsers(recipients, {
+        storeId: t.storeId,
+        title: `Critical fuel level — tank ${t.tankNumber} (${t.grade})`,
+        description: `${t.store.name}: ${vol.toFixed(0)} gal / ${cap.toFixed(0)} gal (${pct.toFixed(1)}% full). Schedule a delivery.`,
+        severity: "critical",
+        category: "fuel_tank",
+        linkUrl: `/store/${encodeURIComponent(t.storeId)}/fuel`,
+        dedupeKeyForUser: (uid) => `fuel_tank_crit:${t.id}:${todayYmd}:${uid}`,
+      });
+      n += created;
+      continue;
+    }
+    if (pct < 25) {
+      const created = await notifyUsers(recipients, {
+        storeId: t.storeId,
+        title: `Low fuel — tank ${t.tankNumber} (${t.grade})`,
+        description: `${t.store.name}: ${vol.toFixed(0)} gal / ${cap.toFixed(0)} gal (${pct.toFixed(1)}% full). Consider scheduling a delivery.`,
+        severity: "warning",
+        category: "fuel_tank",
+        linkUrl: `/store/${encodeURIComponent(t.storeId)}/fuel`,
+        dedupeKeyForUser: (uid) => `fuel_tank_warn:${t.id}:${todayYmd}:${uid}`,
+      });
+      n += created;
+    }
+  }
+  if (n) log.push(`fuel_tank: ${n} notification(s)`);
+  return n;
+}
+
 /**
  * Evaluates automated alert conditions and inserts notifications (idempotent per dedupe key).
  */
@@ -272,6 +317,7 @@ export async function runAlertChecks(): Promise<AlertCheckResult> {
   created += await checkStalePurchaseOrders(log);
   created += await checkAuditOverdue(log);
   created += await checkShrinkageRatio(log);
+  created += await checkFuelTankLevels(log);
   if (created === 0) log.push("no new notifications");
   return { created, log };
 }

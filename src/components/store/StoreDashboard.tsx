@@ -15,7 +15,7 @@ export default function StoreDashboard(props: {
   adminStores: StoreOption[];
 }) {
   const { storeId, storeName, userRole, canAudit, adminStores } = props;
-  const [tab, setTab] = useState<"inventory" | "ordering" | "sales" | "schedule">("inventory");
+  const [tab, setTab] = useState<"inventory" | "ordering" | "sales" | "schedule" | "fuel">("inventory");
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
@@ -108,6 +108,20 @@ export default function StoreDashboard(props: {
         >
           Schedule
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("fuel")}
+          style={{
+            padding: "10px 16px",
+            border: "none",
+            background: tab === "fuel" ? "#f4f4f5" : "transparent",
+            borderBottom: tab === "fuel" ? "2px solid #2563eb" : "2px solid transparent",
+            cursor: "pointer",
+            fontWeight: tab === "fuel" ? 600 : 400,
+          }}
+        >
+          Fuel
+        </button>
       </div>
 
       {tab === "inventory" ? (
@@ -156,6 +170,29 @@ export default function StoreDashboard(props: {
             }}
           >
             Open schedule
+          </Link>
+        </section>
+      ) : tab === "fuel" ? (
+        <section>
+          <h2 style={{ marginTop: 0 }}>Fuel management</h2>
+          <p style={{ opacity: 0.85, maxWidth: 560 }}>
+            Tank gauges, delivery log, retail price updates, and estimated daily gallons sold. Managers log deliveries
+            and change prices; employees can view levels only. Admins also have a multi-store overview under Admin.
+          </p>
+          <Link
+            href={`/store/${encodeURIComponent(storeId)}/fuel`}
+            style={{
+              display: "inline-block",
+              marginTop: 12,
+              padding: "12px 20px",
+              background: "#2563eb",
+              color: "#fff",
+              borderRadius: 8,
+              textDecoration: "none",
+              fontWeight: 600,
+            }}
+          >
+            Open fuel dashboard
           </Link>
         </section>
       ) : (
