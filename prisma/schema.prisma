@@ -96,6 +96,8 @@ model Store {
   shrinkageRecords   ShrinkageRecord[]
   notifications      Notification[]
   productPriceOverrides StoreProductPriceOverride[]
+  shifts             Shift[]
+  shiftTemplates     ShiftTemplate[]
 }
 
 model User {
@@ -122,6 +124,47 @@ model User {
   notifications          Notification[]           @relation("NotificationRecipient")
   notificationPreference UserNotificationPreference?
   productChangeLogs      ProductChangeLog[]
+  shiftsAsEmployee       Shift[]                  @relation("ShiftEmployee")
+  shiftsCreated          Shift[]                  @relation("ShiftCreatedBy")
+  shiftTemplatesCreated  ShiftTemplate[]
+}
+
+/// One scheduled work block per employee per calendar day at a store (start/end as minutes from midnight; if end <= start, shift crosses midnight).
+model Shift {
+  id           String   @id @default(cuid())
+  storeId      String
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  employeeId   String
+  employee     User     @relation("ShiftEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  shiftDate    DateTime @db.Date
+  startMinutes Int
+  endMinutes   Int
+  templateName String?
+  notes        String?  @db.Text
+  createdById  String
+  createdBy    User     @relation("ShiftCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([storeId, employeeId, shiftDate])
+  @@index([storeId, shiftDate])
+  @@index([employeeId])
+}
+
+model ShiftTemplate {
+  id           String   @id @default(cuid())
+  storeId      String
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name         String
+  startMinutes Int
+  endMinutes   Int
+  createdById  String
+  createdBy    User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([storeId, name])
+  @@index([storeId])
 }
 
 model LoginAttempt {

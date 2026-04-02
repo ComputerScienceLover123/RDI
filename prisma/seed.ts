@@ -85,6 +85,8 @@ async function main() {
 
   await prisma.notification.deleteMany();
   await prisma.userNotificationPreference.deleteMany();
+  await prisma.shift.deleteMany();
+  await prisma.shiftTemplate.deleteMany();
   await prisma.loginAttempt.deleteMany();
   await prisma.user.deleteMany();
   await prisma.store.deleteMany();

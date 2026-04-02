@@ -15,7 +15,7 @@ export default function StoreDashboard(props: {
   adminStores: StoreOption[];
 }) {
   const { storeId, storeName, userRole, canAudit, adminStores } = props;
-  const [tab, setTab] = useState<"inventory" | "ordering" | "sales">("inventory");
+  const [tab, setTab] = useState<"inventory" | "ordering" | "sales" | "schedule">("inventory");
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
@@ -94,6 +94,20 @@ export default function StoreDashboard(props: {
         >
           Sales
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("schedule")}
+          style={{
+            padding: "10px 16px",
+            border: "none",
+            background: tab === "schedule" ? "#f4f4f5" : "transparent",
+            borderBottom: tab === "schedule" ? "2px solid #2563eb" : "2px solid transparent",
+            cursor: "pointer",
+            fontWeight: tab === "schedule" ? 600 : 400,
+          }}
+        >
+          Schedule
+        </button>
       </div>
 
       {tab === "inventory" ? (
@@ -119,6 +133,29 @@ export default function StoreDashboard(props: {
             }}
           >
             Open purchase orders
+          </Link>
+        </section>
+      ) : tab === "schedule" ? (
+        <section>
+          <h2 style={{ marginTop: 0 }}>Employee schedule</h2>
+          <p style={{ opacity: 0.85, maxWidth: 560 }}>
+            Weekly grid, day timeline, shift templates, and copy from last week. Managers and admins can edit;
+            employees see the store schedule read-only.
+          </p>
+          <Link
+            href={`/store/${encodeURIComponent(storeId)}/schedule`}
+            style={{
+              display: "inline-block",
+              marginTop: 12,
+              padding: "12px 20px",
+              background: "#2563eb",
+              color: "#fff",
+              borderRadius: 8,
+              textDecoration: "none",
+              fontWeight: 600,
+            }}
+          >
+            Open schedule
           </Link>
         </section>
       ) : (
