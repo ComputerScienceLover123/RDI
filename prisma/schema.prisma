@@ -125,6 +125,33 @@ enum NotificationCategory {
   lottery
   scan_data
   reporting
+  compliance
+}
+
+/// How age was verified at POS (mock or live terminal).
+enum AgeVerificationMethod {
+  visual_check
+  id_scanned
+  id_manual_entry
+}
+
+enum AgeVerificationIdType {
+  drivers_license
+  state_id
+  passport
+  military_id
+}
+
+enum AgeVerificationResult {
+  approved
+  declined
+}
+
+enum AgeDeclinedReason {
+  underage
+  expired_id
+  no_id_present
+  other
 }
 
 /// HQ consolidated report builder (admin only).
@@ -219,6 +246,7 @@ model Store {
   lotterySettlements     LotterySettlement[]
   lotteryDailySummaries    LotteryDailySummary[]
   scanDataSubmissions    ScanDataSubmission[]
+  ageVerificationLogs    AgeVerificationLog[]
 }
 
 model User {
@@ -259,6 +287,7 @@ model User {
   scanDataSubmissions      ScanDataSubmission[]  @relation("ScanDataSubmittedBy")
   hqReportTemplatesCreated HqReportTemplate[]    @relation("HqReportTemplateAuthor")
   hqGeneratedReports       HqGeneratedReport[]   @relation("HqGeneratedReportAuthor")
+  ageVerificationLogs      AgeVerificationLog[]  @relation("AgeVerificationCashier")
 }
 
 /// One scheduled work block per employee per calendar day at a store (start/end as minutes from midnight; if end <= start, shift crosses midnight).
@@ -343,13 +372,18 @@ model Product {
   vendor       Vendor          @relation(fields: [vendorId], references: [id])
   costPrice    Decimal         @db.Decimal(12, 2)
   retailPrice  Decimal         @db.Decimal(12, 2)
-  taxEligible  Boolean         @default(true)
-  active       Boolean         @default(true)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  taxEligible   Boolean         @default(true)
+  /// When true, POS must capture age verification before completing the sale.
+  ageRestricted Boolean         @default(false)
+  /// Minimum legal age to purchase (e.g. 21 tobacco/alcohol, 18 for some jurisdictions).
+  minimumAge    Int             @default(21)
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
   inventory              Inventory[]
   transactionLineItems   TransactionLineItem[]
+  ageVerificationLogs    AgeVerificationLog[]
   purchaseOrderLineItems PurchaseOrderLineItem[]
   auditLogs              AuditLog[]
   shrinkageRecords       ShrinkageRecord[]
@@ -425,7 +459,8 @@ model PosTransaction {
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 
-  lineItems TransactionLineItem[]
+  lineItems             TransactionLineItem[]
+  ageVerificationLogs AgeVerificationLog[]
 
   @@index([storeId])
   @@index([transactionAt])
@@ -445,6 +480,35 @@ model TransactionLineItem {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
+  ageVerificationLog AgeVerificationLog?
+
+  @@index([transactionId])
+  @@index([productId])
+}
+
+/// Regulatory log for age-restricted product sales (approved or declined). Optional transaction/line when sale was blocked before tender.
+model AgeVerificationLog {
+  id               String                  @id @default(cuid())
+  storeId          String
+  store            Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  transactionId    String?
+  transaction      PosTransaction?         @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  lineItemId       String?                 @unique
+  lineItem         TransactionLineItem?    @relation(fields: [lineItemId], references: [id], onDelete: SetNull)
+  productId        String
+  product          Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  employeeId       String
+  employee         User                    @relation("AgeVerificationCashier", fields: [employeeId], references: [id], onDelete: Cascade)
+  method           AgeVerificationMethod
+  customerDob      DateTime?               @db.Date
+  customerAgeYears Int?
+  idType           AgeVerificationIdType?
+  result           AgeVerificationResult
+  declinedReason   AgeDeclinedReason?
+  verifiedAt       DateTime                @default(now())
+
+  @@index([storeId, verifiedAt])
+  @@index([employeeId, verifiedAt])
   @@index([transactionId])
   @@index([productId])
 }
@@ -876,6 +940,7 @@ model UserNotificationPreference {
   lottery       Boolean @default(true)
   scanData      Boolean @default(true)
   reporting     Boolean @default(true)
+  compliance    Boolean @default(true)
   updatedAt     DateTime @updatedAt
 }
 

@@ -27,6 +27,8 @@ const CreateSchema = z.object({
   retailPrice: z.string().or(z.number()),
   taxEligible: z.boolean(),
   description: z.string().optional().nullable(),
+  ageRestricted: z.boolean().optional(),
+  minimumAge: z.number().int().min(16).max(99).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -64,6 +66,8 @@ export async function POST(req: NextRequest) {
         taxEligible: b.taxEligible,
         description: b.description ?? null,
         active: true,
+        ageRestricted: b.ageRestricted ?? false,
+        minimumAge: b.minimumAge ?? 21,
       },
     });
 

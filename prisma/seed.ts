@@ -96,6 +96,7 @@ async function main() {
   await prisma.foodserviceMenuItem.deleteMany();
   await prisma.recipeIngredient.deleteMany();
   await prisma.recipe.deleteMany();
+  await prisma.ageVerificationLog.deleteMany();
   await prisma.transactionLineItem.deleteMany();
   await prisma.storeProductPriceOverride.deleteMany();
   await prisma.productChangeLog.deleteMany();
@@ -238,6 +239,11 @@ async function main() {
   }
 
   await prisma.product.createMany({ data: productRows });
+
+  await prisma.product.updateMany({
+    where: { category: ProductCategory.tobacco },
+    data: { ageRestricted: true, minimumAge: 21 },
+  });
 
   const products = await prisma.product.findMany({ orderBy: { upc: "asc" } });
   if (products.length !== 50) throw new Error("Expected 50 products");

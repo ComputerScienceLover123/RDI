@@ -14,6 +14,7 @@ type Prefs = {
   lottery: boolean;
   scanData: boolean;
   reporting: boolean;
+  compliance: boolean;
 };
 
 const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
@@ -43,6 +44,11 @@ const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
     label: "HQ reports",
     hint: "When scheduled chain reports finish generating and are ready to download.",
   },
+  {
+    key: "compliance",
+    label: "Age compliance",
+    hint: "Missing age verification on restricted sales, low verification rates, and daily compliance summaries.",
+  },
   { key: "system", label: "System", hint: "General system messages." },
 ];
 
@@ -60,6 +66,7 @@ export default function NotificationPreferencesClient() {
             lottery: typeof j.lottery === "boolean" ? j.lottery : true,
             scanData: typeof j.scanData === "boolean" ? j.scanData : true,
             reporting: typeof j.reporting === "boolean" ? j.reporting : true,
+            compliance: typeof j.compliance === "boolean" ? j.compliance : true,
           } as Prefs);
         }
       });

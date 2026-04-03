@@ -66,6 +66,8 @@ export async function GET(req: NextRequest) {
     marginPct: number | null;
     taxEligible: boolean;
     active: boolean;
+    ageRestricted: boolean;
+    minimumAge: number;
     overrideStoreCount: number;
   };
 
@@ -82,6 +84,8 @@ export async function GET(req: NextRequest) {
     marginPct: marginPct(p.costPrice, p.retailPrice),
     taxEligible: p.taxEligible,
     active: p.active,
+    ageRestricted: p.ageRestricted,
+    minimumAge: p.minimumAge,
     overrideStoreCount: ocMap.get(p.id) ?? 0,
   }));
 

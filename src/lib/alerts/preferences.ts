@@ -38,6 +38,8 @@ export function categoryAllowedByPreference(
       return prefs.scanData;
     case "reporting":
       return prefs.reporting;
+    case "compliance":
+      return prefs.compliance;
     default:
       return true;
   }

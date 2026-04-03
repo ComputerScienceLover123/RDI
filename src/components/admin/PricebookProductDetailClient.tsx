@@ -26,6 +26,8 @@ type ProductPayload = {
   retailPrice: string;
   taxEligible: boolean;
   active: boolean;
+  ageRestricted: boolean;
+  minimumAge: number;
 };
 
 export default function PricebookProductDetailClient(props: { productId: string }) {
@@ -131,6 +133,19 @@ export default function PricebookProductDetailClient(props: { productId: string 
       </p>
       <p>
         Vendor: <strong>{product.vendorName}</strong> · Chain retail ${product.retailPrice} · Cost ${product.costPrice}
+      </p>
+      <p style={{ fontSize: 14 }}>
+        Age compliance:{" "}
+        {product.ageRestricted ? (
+          <>
+            <strong>Restricted</strong> — minimum age {product.minimumAge}
+          </>
+        ) : (
+          "Not age-restricted"
+        )}{" "}
+        <span style={{ opacity: 0.75 }}>
+          (edit on the <Link href="/admin/pricebook">pricebook</Link> list)
+        </span>
       </p>
 
       <section style={{ marginTop: 28 }}>

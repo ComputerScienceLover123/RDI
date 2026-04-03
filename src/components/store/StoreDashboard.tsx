@@ -118,6 +118,9 @@ export default function StoreDashboard(props: {
             Scan data
           </NavLink>
         ) : null}
+        <NavLink href={`${base}/compliance`} active={false}>
+          Compliance
+        </NavLink>
       </nav>
 
       {panel === "home" ? (

@@ -265,6 +265,9 @@ export default function AppHeader({ user }: { user: HeaderUser }) {
             <Link href="/admin/reports" style={{ color: "#2563eb", fontSize: 14 }}>
               HQ reports
             </Link>
+            <Link href="/admin/compliance" style={{ color: "#2563eb", fontSize: 14 }}>
+              Compliance
+            </Link>
           </>
         ) : null}
         <Link href="/account/notifications" style={{ color: "#2563eb", fontSize: 14 }}>

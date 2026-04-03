@@ -600,6 +600,144 @@ export async function runAlertChecks(): Promise<AlertCheckResult> {
   created += await checkLotteryDailyOverShort(log);
   created += await checkScanDataReportDue(log);
   created += await checkScanDataSubmissionOverdue(log);
+  created += await checkAgeRestrictedSaleGaps(log);
+  created += await checkEmployeeAgeVerificationRate7d(log);
+  created += await checkDailyComplianceSummary(log);
   if (created === 0) log.push("no new notifications");
   return { created, log };
+}
+
+async function checkAgeRestrictedSaleGaps(log: string[]): Promise<number> {
+  let n = 0;
+  const todayStart = startOfLocalDay(new Date());
+  const todayEnd = endOfLocalDay(new Date());
+  const todayYmd = formatLocalYMD(new Date());
+
+  const stores = await prisma.store.findMany({ select: { id: true, name: true } });
+  for (const s of stores) {
+    const gapCount = await prisma.transactionLineItem.count({
+      where: {
+        product: { ageRestricted: true },
+        ageVerificationLog: null,
+        transaction: {
+          storeId: s.id,
+          type: "sale",
+          transactionAt: { gte: todayStart, lte: todayEnd },
+        },
+      },
+    });
+    if (gapCount === 0) continue;
+
+    const recipients = await getManagerAdminUserIdsForStore(s.id);
+    if (recipients.length === 0) continue;
+    const created = await notifyUsers(recipients, {
+      storeId: s.id,
+      title: `Critical: age-restricted sales without verification — ${s.name}`,
+      description: `${gapCount} age-restricted line item(s) sold today with no age verification log. Investigate immediately.`,
+      severity: "critical",
+      category: "compliance",
+      linkUrl: `/store/${encodeURIComponent(s.id)}/compliance`,
+      dedupeKeyForUser: (uid) => `age_gap:${s.id}:${todayYmd}:${uid}`,
+    });
+    n += created;
+  }
+  if (n) log.push(`age_compliance_gap: ${n} notification(s)`);
+  return n;
+}
+
+async function checkEmployeeAgeVerificationRate7d(log: string[]): Promise<number> {
+  let n = 0;
+  const end = endOfLocalDay(new Date());
+  const start = startOfLocalDay(new Date());
+  start.setDate(start.getDate() - 7);
+  const weekKey = formatLocalYMD(start);
+
+  const employees = await prisma.user.findMany({
+    where: { accountStatus: "active", role: { in: ["employee", "manager"] }, assignedStoreId: { not: null } },
+    select: { id: true, assignedStoreId: true, firstName: true, lastName: true },
+  });
+
+  for (const e of employees) {
+    const storeId = e.assignedStoreId!;
+    const [appr, dec] = await Promise.all([
+      prisma.ageVerificationLog.count({
+        where: { employeeId: e.id, verifiedAt: { gte: start, lte: end }, result: "approved" },
+      }),
+      prisma.ageVerificationLog.count({
+        where: { employeeId: e.id, verifiedAt: { gte: start, lte: end }, result: "declined" },
+      }),
+    ]);
+    const denom = appr + dec;
+    if (denom < 5) continue;
+    if (dec === 0) continue;
+
+    const rate = appr / denom;
+    if (rate >= 1) continue;
+
+    const managers = await getManagerAdminUserIdsForStore(storeId);
+    if (managers.length === 0) continue;
+    const name = `${e.firstName} ${e.lastName}`.trim();
+    const created = await notifyUsers(managers, {
+      storeId,
+      title: `Age verification rate — ${name}`,
+      description: `Past 7 days at this store: ${appr} approved vs ${dec} declined age checks (${(rate * 100).toFixed(1)}% approval). Consider refresher training.`,
+      severity: "warning",
+      category: "compliance",
+      linkUrl: `/store/${encodeURIComponent(storeId)}/compliance`,
+      dedupeKeyForUser: (uid) => `age_rate_emp:${e.id}:${weekKey}:${uid}`,
+    });
+    n += created;
+  }
+  if (n) log.push(`age_verification_rate: ${n} notification(s)`);
+  return n;
+}
+
+async function checkDailyComplianceSummary(log: string[]): Promise<number> {
+  let n = 0;
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const dayStart = startOfLocalDay(y);
+  const dayEnd = endOfLocalDay(y);
+  const dayYmd = formatLocalYMD(dayStart);
+
+  const stores = await prisma.store.findMany({ select: { id: true, name: true } });
+  for (const s of stores) {
+    const [appr, dec, gaps] = await Promise.all([
+      prisma.ageVerificationLog.count({
+        where: { storeId: s.id, result: "approved", verifiedAt: { gte: dayStart, lte: dayEnd } },
+      }),
+      prisma.ageVerificationLog.count({
+        where: { storeId: s.id, result: "declined", verifiedAt: { gte: dayStart, lte: dayEnd } },
+      }),
+      prisma.transactionLineItem.count({
+        where: {
+          product: { ageRestricted: true },
+          ageVerificationLog: null,
+          transaction: {
+            storeId: s.id,
+            type: "sale",
+            transactionAt: { gte: dayStart, lte: dayEnd },
+          },
+        },
+      }),
+    ]);
+    const total = appr + dec;
+    if (total === 0 && gaps === 0) continue;
+
+    const recipients = await getManagerAdminUserIdsForStore(s.id);
+    if (recipients.length === 0) continue;
+    const rate = total > 0 ? ((appr / total) * 100).toFixed(1) : "—";
+    const created = await notifyUsers(recipients, {
+      storeId: s.id,
+      title: `Daily age compliance — ${s.name} (${dayYmd})`,
+      description: `Verifications: ${appr} approved, ${dec} declined (${rate}% approval rate). Age-restricted lines missing verification: ${gaps}.`,
+      severity: "info",
+      category: "compliance",
+      linkUrl: `/store/${encodeURIComponent(s.id)}/compliance`,
+      dedupeKeyForUser: (uid) => `age_daily_sum:${s.id}:${dayYmd}:${uid}`,
+    });
+    n += created;
+  }
+  if (n) log.push(`age_compliance_daily: ${n} notification(s)`);
+  return n;
 }

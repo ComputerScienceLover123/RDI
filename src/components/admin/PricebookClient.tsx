@@ -16,6 +16,8 @@ type ProductRow = {
   marginPct: number | null;
   taxEligible: boolean;
   active: boolean;
+  ageRestricted: boolean;
+  minimumAge: number;
   overrideStoreCount: number;
 };
 
@@ -87,6 +89,8 @@ export default function PricebookClient() {
     costPrice: "",
     retailPrice: "",
     taxEligible: true,
+    ageRestricted: false,
+    minimumAge: "21",
   });
 
   const qDebounced = useDebounced(q, 300);
@@ -207,6 +211,8 @@ export default function PricebookClient() {
         costPrice: newForm.costPrice,
         retailPrice: newForm.retailPrice,
         taxEligible: newForm.taxEligible,
+        ageRestricted: newForm.ageRestricted,
+        minimumAge: Number(newForm.minimumAge) || 21,
       }),
     });
     if (res.ok) {
@@ -221,6 +227,8 @@ export default function PricebookClient() {
         costPrice: "",
         retailPrice: "",
         taxEligible: true,
+        ageRestricted: false,
+        minimumAge: "21",
       });
       void load();
     } else {
@@ -331,6 +339,8 @@ export default function PricebookClient() {
                     {sortBy === k ? (sortOrder === "asc" ? " ▲" : " ▼") : ""}
                   </th>
                 ))}
+                <th style={{ padding: 8 }}>Age</th>
+                <th style={{ padding: 8 }}>Min age</th>
                 <th style={{ padding: 8 }}>Detail</th>
               </tr>
             </thead>
@@ -388,6 +398,23 @@ export default function PricebookClient() {
                     />
                   </td>
                   <td style={{ padding: 6 }}>{p.overrideStoreCount}</td>
+                  <td style={{ padding: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={p.ageRestricted}
+                      onChange={(e) => void patchProduct(p.id, { ageRestricted: e.target.checked })}
+                    />
+                  </td>
+                  <td style={{ padding: 6 }}>
+                    <input
+                      type="number"
+                      min={16}
+                      max={99}
+                      style={{ width: 52, padding: 4 }}
+                      value={p.minimumAge}
+                      onChange={(e) => void patchProduct(p.id, { minimumAge: Number(e.target.value) })}
+                    />
+                  </td>
                   <td style={{ padding: 6 }}>
                     <Link href={`/admin/pricebook/${encodeURIComponent(p.id)}`} style={{ fontSize: 12 }}>
                       View
@@ -480,6 +507,24 @@ export default function PricebookClient() {
                   onChange={(e) => setNewForm((f) => ({ ...f, taxEligible: e.target.checked }))}
                 />
                 Tax eligible
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={newForm.ageRestricted}
+                  onChange={(e) => setNewForm((f) => ({ ...f, ageRestricted: e.target.checked }))}
+                />
+                Age-restricted product
+              </label>
+              <label style={{ display: "grid", gap: 4 }}>
+                Minimum age
+                <input
+                  type="number"
+                  min={16}
+                  max={99}
+                  value={newForm.minimumAge}
+                  onChange={(e) => setNewForm((f) => ({ ...f, minimumAge: e.target.value }))}
+                />
               </label>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>

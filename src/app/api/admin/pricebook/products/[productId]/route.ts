@@ -31,6 +31,8 @@ const PatchSchema = z
     retailPrice: z.union([z.string(), z.number()]).optional(),
     taxEligible: z.boolean().optional(),
     active: z.boolean().optional(),
+    ageRestricted: z.boolean().optional(),
+    minimumAge: z.number().int().min(16).max(99).optional(),
   })
   .strict();
 
@@ -71,6 +73,8 @@ export async function GET(_req: NextRequest, { params }: { params: { productId: 
       retailPrice: product.retailPrice.toString(),
       taxEligible: product.taxEligible,
       active: product.active,
+      ageRestricted: product.ageRestricted,
+      minimumAge: product.minimumAge,
       createdAt: product.createdAt.toISOString(),
       updatedAt: product.updatedAt.toISOString(),
     },
@@ -170,6 +174,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { productId:
         updates.active = data.active;
         await log("active", existing.active, data.active);
       }
+      if (data.ageRestricted !== undefined && data.ageRestricted !== existing.ageRestricted) {
+        updates.ageRestricted = data.ageRestricted;
+        await log("ageRestricted", existing.ageRestricted, data.ageRestricted);
+      }
+      if (data.minimumAge !== undefined && data.minimumAge !== existing.minimumAge) {
+        updates.minimumAge = data.minimumAge;
+        await log("minimumAge", existing.minimumAge, data.minimumAge);
+      }
 
       if (Object.keys(updates).length > 0) {
         await tx.product.update({
@@ -198,6 +210,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { productId:
           retailPrice: fresh.retailPrice.toString(),
           taxEligible: fresh.taxEligible,
           active: fresh.active,
+          ageRestricted: fresh.ageRestricted,
+          minimumAge: fresh.minimumAge,
         }
       : null,
   });
