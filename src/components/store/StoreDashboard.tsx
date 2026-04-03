@@ -15,7 +15,9 @@ export default function StoreDashboard(props: {
   adminStores: StoreOption[];
 }) {
   const { storeId, storeName, userRole, canAudit, adminStores } = props;
-  const [tab, setTab] = useState<"inventory" | "ordering" | "sales" | "schedule" | "fuel">("inventory");
+  const [tab, setTab] = useState<"inventory" | "ordering" | "sales" | "schedule" | "fuel" | "foodservice">(
+    "inventory",
+  );
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
@@ -122,6 +124,20 @@ export default function StoreDashboard(props: {
         >
           Fuel
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("foodservice")}
+          style={{
+            padding: "10px 16px",
+            border: "none",
+            background: tab === "foodservice" ? "#f4f4f5" : "transparent",
+            borderBottom: tab === "foodservice" ? "2px solid #2563eb" : "2px solid transparent",
+            cursor: "pointer",
+            fontWeight: tab === "foodservice" ? 600 : 400,
+          }}
+        >
+          Foodservice
+        </button>
       </div>
 
       {tab === "inventory" ? (
@@ -193,6 +209,30 @@ export default function StoreDashboard(props: {
             }}
           >
             Open fuel dashboard
+          </Link>
+        </section>
+      ) : tab === "foodservice" ? (
+        <section>
+          <h2 style={{ marginTop: 0 }}>Foodservice</h2>
+          <p style={{ opacity: 0.85, maxWidth: 560 }}>
+            Hot case timers, waste logging, recipes, production planning, and Hatch items (where enabled). Employees run
+            the hot case; managers plan production; admins configure menus and Hatch locations under Admin →
+            Foodservice.
+          </p>
+          <Link
+            href={`/store/${encodeURIComponent(storeId)}/foodservice`}
+            style={{
+              display: "inline-block",
+              marginTop: 12,
+              padding: "12px 20px",
+              background: "#2563eb",
+              color: "#fff",
+              borderRadius: 8,
+              textDecoration: "none",
+              fontWeight: 600,
+            }}
+          >
+            Open foodservice module
           </Link>
         </section>
       ) : (

@@ -15,6 +15,7 @@ const PatchSchema = z
     shrinkage: z.boolean().optional(),
     system: z.boolean().optional(),
     fuelTank: z.boolean().optional(),
+    foodservice: z.boolean().optional(),
   })
   .strict();
 
@@ -36,6 +37,7 @@ export async function GET() {
     shrinkage: prefs.shrinkage,
     system: prefs.system,
     fuelTank: prefs.fuelTank,
+    foodservice: prefs.foodservice,
   });
 }
 
@@ -68,5 +70,6 @@ export async function PATCH(req: NextRequest) {
     shrinkage: prefs.shrinkage,
     system: prefs.system,
     fuelTank: prefs.fuelTank,
+    foodservice: prefs.foodservice,
   });
 }

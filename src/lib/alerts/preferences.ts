@@ -30,6 +30,8 @@ export function categoryAllowedByPreference(
       return prefs.system;
     case "fuel_tank":
       return prefs.fuelTank;
+    case "foodservice":
+      return prefs.foodservice;
     default:
       return true;
   }

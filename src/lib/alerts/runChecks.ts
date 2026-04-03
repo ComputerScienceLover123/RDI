@@ -306,6 +306,120 @@ async function checkFuelTankLevels(log: string[]): Promise<number> {
   return n;
 }
 
+async function checkFoodserviceWasteRatio(log: string[]): Promise<number> {
+  let n = 0;
+  const stores = await prisma.store.findMany({ select: { id: true, name: true } });
+  const todayYmd = formatLocalYMD(new Date());
+  const todayStart = startOfLocalDay(new Date());
+  const todayEnd = endOfLocalDay(new Date());
+
+  for (const s of stores) {
+    const [wasteSum, soldSum] = await Promise.all([
+      prisma.foodserviceWasteLog.aggregate({
+        where: { storeId: s.id, createdAt: { gte: todayStart, lte: todayEnd } },
+        _sum: { quantity: true },
+      }),
+      prisma.foodserviceHotCaseEntry.aggregate({
+        where: { storeId: s.id, status: "sold", disposedAt: { gte: todayStart, lte: todayEnd } },
+        _sum: { quantityPlaced: true },
+      }),
+    ]);
+    const w = wasteSum._sum.quantity ?? 0;
+    const sold = soldSum._sum.quantityPlaced ?? 0;
+    const throughput = w + sold;
+    if (throughput <= 0) continue;
+    const pct = (w / throughput) * 100;
+    if (pct <= 15) continue;
+
+    const recipients = await getManagerAdminUserIdsForStore(s.id);
+    if (recipients.length === 0) continue;
+    const created = await notifyUsers(recipients, {
+      storeId: s.id,
+      title: `Foodservice waste high — ${s.name}`,
+      description: `Today's waste is ${pct.toFixed(1)}% of hot-case throughput (${w} units wasted vs ${sold} sold). Review production and hold times.`,
+      severity: "warning",
+      category: "foodservice",
+      linkUrl: `/store/${encodeURIComponent(s.id)}/foodservice`,
+      dedupeKeyForUser: (uid) => `foodservice_waste_pct:${s.id}:${todayYmd}:${uid}`,
+    });
+    n += created;
+  }
+  if (n) log.push(`foodservice_waste: ${n} notification(s)`);
+  return n;
+}
+
+async function checkFoodserviceRecipeIngredients(log: string[]): Promise<number> {
+  let n = 0;
+  const stores = await prisma.store.findMany({ select: { id: true, name: true } });
+  const todayYmd = formatLocalYMD(new Date());
+
+  for (const s of stores) {
+    const items = await prisma.foodserviceMenuItem.findMany({
+      where: { storeId: s.id, active: true },
+      include: { recipe: { include: { ingredients: true } } },
+    });
+    const shortNames = new Set<string>();
+    for (const m of items) {
+      if (!m.recipe) continue;
+      for (const ing of m.recipe.ingredients) {
+        const inv = await prisma.inventory.findUnique({
+          where: { storeId_productId: { storeId: s.id, productId: ing.productId } },
+          include: { product: { select: { name: true } } },
+        });
+        const qoh = inv?.quantityOnHand ?? 0;
+        const min = inv?.minStockThreshold ?? 0;
+        const need = Number(ing.quantityPerBatch);
+        if (qoh < need || qoh <= min) {
+          shortNames.add(inv?.product.name ?? ing.productId);
+        }
+      }
+    }
+    if (shortNames.size === 0) continue;
+
+    const recipients = await getManagerAdminUserIdsForStore(s.id);
+    if (recipients.length === 0) continue;
+    const list = [...shortNames].slice(0, 5).join(", ");
+    const created = await notifyUsers(recipients, {
+      storeId: s.id,
+      title: `Foodservice ingredients low — ${s.name}`,
+      description: `Some recipe ingredients are at or below minimum or short for a batch: ${list}${shortNames.size > 5 ? "…" : ""}.`,
+      severity: "warning",
+      category: "foodservice",
+      linkUrl: `/store/${encodeURIComponent(s.id)}/foodservice`,
+      dedupeKeyForUser: (uid) => `foodservice_recipe_stock:${s.id}:${todayYmd}:${uid}`,
+    });
+    n += created;
+  }
+  if (n) log.push(`foodservice_recipe_stock: ${n} notification(s)`);
+  return n;
+}
+
+async function checkFoodserviceMorningPrep(log: string[]): Promise<number> {
+  const hour = new Date().getHours();
+  if (hour < 6 || hour > 10) return 0;
+
+  let n = 0;
+  const stores = await prisma.store.findMany({ select: { id: true, name: true } });
+  const todayYmd = formatLocalYMD(new Date());
+
+  for (const s of stores) {
+    const recipients = await getManagerAdminUserIdsForStore(s.id);
+    if (recipients.length === 0) continue;
+    const created = await notifyUsers(recipients, {
+      storeId: s.id,
+      title: `Production plan — ${s.name}`,
+      description: `Review today's suggested prep quantities in Foodservice → Production planning.`,
+      severity: "info",
+      category: "foodservice",
+      linkUrl: `/store/${encodeURIComponent(s.id)}/foodservice`,
+      dedupeKeyForUser: (uid) => `foodservice_morning:${s.id}:${todayYmd}:${uid}`,
+    });
+    n += created;
+  }
+  if (n) log.push(`foodservice_morning: ${n} notification(s)`);
+  return n;
+}
+
 /**
  * Evaluates automated alert conditions and inserts notifications (idempotent per dedupe key).
  */
@@ -318,6 +432,9 @@ export async function runAlertChecks(): Promise<AlertCheckResult> {
   created += await checkAuditOverdue(log);
   created += await checkShrinkageRatio(log);
   created += await checkFuelTankLevels(log);
+  created += await checkFoodserviceWasteRatio(log);
+  created += await checkFoodserviceRecipeIngredients(log);
+  created += await checkFoodserviceMorningPrep(log);
   if (created === 0) log.push("no new notifications");
   return { created, log };
 }

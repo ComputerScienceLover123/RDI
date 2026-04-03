@@ -10,6 +10,7 @@ type Prefs = {
   shrinkage: boolean;
   system: boolean;
   fuelTank: boolean;
+  foodservice: boolean;
 };
 
 const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
@@ -19,6 +20,11 @@ const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
   { key: "auditReminder", label: "Inventory audit reminders", hint: "Stores with no recent audit activity." },
   { key: "shrinkage", label: "Shrinkage ratio", hint: "Shrinkage high relative to units sold." },
   { key: "fuelTank", label: "Fuel tank levels", hint: "When underground tanks drop below 25% (warning) or 15% (critical)." },
+  {
+    key: "foodservice",
+    label: "Foodservice",
+    hint: "High waste vs throughput, morning production reminders, and low recipe ingredients at your store.",
+  },
   { key: "system", label: "System", hint: "General system messages." },
 ];
 

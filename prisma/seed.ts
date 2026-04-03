@@ -6,6 +6,10 @@ import {
   TransactionType,
   PaymentMethod,
   FuelGrade,
+  FoodserviceBrand,
+  FoodserviceCategory,
+  FoodserviceHotCaseStatus,
+  FoodserviceWasteReason,
   Prisma,
 } from "@prisma/client";
 import type { Inventory, Product } from "@prisma/client";
@@ -79,12 +83,19 @@ async function main() {
   const seedPassword = requireEnv("SEED_USER_PASSWORD");
 
   const stores = [
-    { id: "store_001", name: "Mock Store 1", location: "Austin, TX" },
-    { id: "store_002", name: "Mock Store 2", location: "Charlotte, NC" },
-    { id: "store_003", name: "Mock Store 3", location: "Denver, CO" },
+    { id: "store_001", name: "Mock Store 1", location: "Austin, TX", hatchEnabled: true },
+    { id: "store_002", name: "Mock Store 2", location: "Charlotte, NC", hatchEnabled: false },
+    { id: "store_003", name: "Mock Store 3", location: "Denver, CO", hatchEnabled: false },
   ];
 
   // Clear business data first (FK order), then auth.
+  await prisma.productionPlanLine.deleteMany();
+  await prisma.productionPlan.deleteMany();
+  await prisma.foodserviceWasteLog.deleteMany();
+  await prisma.foodserviceHotCaseEntry.deleteMany();
+  await prisma.foodserviceMenuItem.deleteMany();
+  await prisma.recipeIngredient.deleteMany();
+  await prisma.recipe.deleteMany();
   await prisma.transactionLineItem.deleteMany();
   await prisma.storeProductPriceOverride.deleteMany();
   await prisma.productChangeLog.deleteMany();
@@ -237,6 +248,179 @@ async function main() {
     }
   }
   await prisma.inventory.createMany({ data: inventoryRows });
+
+  // --- Foodservice: recipes, menu items, sample hot-case history ---
+  const p0 = products[0]!;
+  const p1 = products[1]!;
+  const p2 = products[2]!;
+
+  const recipeRoller = await prisma.recipe.create({
+    data: {
+      name: "Roller Grill — Hot Dogs",
+      brand: FoodserviceBrand.store_brand,
+      category: FoodserviceCategory.roller_grill,
+      instructions: "Cook on roller grill to 160°F internal. Rotate and hold with timer.",
+      prepTimeMinutes: 5,
+      cookTimeMinutes: 12,
+      cookTemperature: "roller",
+      yieldQuantity: d(24),
+    },
+  });
+  await prisma.recipeIngredient.create({
+    data: {
+      recipeId: recipeRoller.id,
+      productId: p0.id,
+      quantityPerBatch: d(24),
+      unitOfMeasure: "each",
+    },
+  });
+
+  const recipePizza = await prisma.recipe.create({
+    data: {
+      name: "Slice — Cheese",
+      brand: FoodserviceBrand.store_brand,
+      category: FoodserviceCategory.pizza,
+      instructions: "Bake, slice, hold under warmer.",
+      prepTimeMinutes: 3,
+      cookTimeMinutes: 8,
+      cookTemperature: "465°F",
+      yieldQuantity: d(8),
+    },
+  });
+  await prisma.recipeIngredient.create({
+    data: {
+      recipeId: recipePizza.id,
+      productId: p1.id,
+      quantityPerBatch: d(2),
+      unitOfMeasure: "pounds",
+    },
+  });
+
+  const recipeHatch = await prisma.recipe.create({
+    data: {
+      name: "Hatch 8pc Fried Chicken",
+      brand: FoodserviceBrand.hatch,
+      category: FoodserviceCategory.chicken,
+      instructions: "Dredge, pressure fry, rest 2 min, hold with timer.",
+      prepTimeMinutes: 10,
+      cookTimeMinutes: 14,
+      cookTemperature: "350°F oil",
+      yieldQuantity: d(8),
+    },
+  });
+  await prisma.recipeIngredient.createMany({
+    data: [
+      {
+        recipeId: recipeHatch.id,
+        productId: p0.id,
+        quantityPerBatch: d(8),
+        unitOfMeasure: "pieces",
+      },
+      {
+        recipeId: recipeHatch.id,
+        productId: p2.id,
+        quantityPerBatch: d(0.5),
+        unitOfMeasure: "cups",
+      },
+    ],
+  });
+
+  for (const store of stores) {
+    const baseItems: Array<{
+      itemName: string;
+      category: FoodserviceCategory;
+      brand: FoodserviceBrand;
+      recipeId: string | null;
+      retailPrice: Prisma.Decimal;
+      holdTimeMinutes: number;
+      prepTimeMinutes: number;
+    }> = [
+      {
+        itemName: "Hot Dog",
+        category: FoodserviceCategory.roller_grill,
+        brand: FoodserviceBrand.store_brand,
+        recipeId: recipeRoller.id,
+        retailPrice: d("2.29"),
+        holdTimeMinutes: 120,
+        prepTimeMinutes: 5,
+      },
+      {
+        itemName: "Cheese Pizza Slice",
+        category: FoodserviceCategory.pizza,
+        brand: FoodserviceBrand.store_brand,
+        recipeId: recipePizza.id,
+        retailPrice: d("3.49"),
+        holdTimeMinutes: 90,
+        prepTimeMinutes: 3,
+      },
+      {
+        itemName: "Taquitos (2)",
+        category: FoodserviceCategory.taquitos,
+        brand: FoodserviceBrand.store_brand,
+        recipeId: null,
+        retailPrice: d("2.99"),
+        holdTimeMinutes: 90,
+        prepTimeMinutes: 2,
+      },
+    ];
+    if (store.hatchEnabled) {
+      baseItems.push({
+        itemName: "Hatch 8pc Chicken",
+        category: FoodserviceCategory.chicken,
+        brand: FoodserviceBrand.hatch,
+        recipeId: recipeHatch.id,
+        retailPrice: d("9.99"),
+        holdTimeMinutes: 90,
+        prepTimeMinutes: 10,
+      });
+    }
+    await prisma.foodserviceMenuItem.createMany({
+      data: baseItems.map((b) => ({
+        storeId: store.id,
+        itemName: b.itemName,
+        category: b.category,
+        brand: b.brand,
+        recipeId: b.recipeId,
+        retailPrice: b.retailPrice,
+        holdTimeMinutes: b.holdTimeMinutes,
+        prepTimeMinutes: b.prepTimeMinutes,
+      })),
+    });
+  }
+
+  const menuStore1 = await prisma.foodserviceMenuItem.findMany({
+    where: { storeId: "store_001" },
+    orderBy: { itemName: "asc" },
+  });
+  const emp = await prisma.user.findFirst({
+    where: { email: "emp1@company.com", accountStatus: AccountStatus.active },
+  });
+  if (emp && menuStore1[0]) {
+    const past = new Date();
+    past.setDate(past.getDate() - 3);
+    await prisma.foodserviceHotCaseEntry.create({
+      data: {
+        storeId: "store_001",
+        menuItemId: menuStore1[0]!.id,
+        quantityPlaced: 4,
+        placedAt: past,
+        expiresAt: new Date(past.getTime() + 60 * 60 * 1000),
+        status: FoodserviceHotCaseStatus.sold,
+        placedById: emp.id,
+        disposedAt: new Date(past.getTime() + 20 * 60 * 1000),
+        disposedById: emp.id,
+      },
+    });
+    await prisma.foodserviceWasteLog.create({
+      data: {
+        storeId: "store_001",
+        menuItemId: menuStore1[1]!.id,
+        quantity: 2,
+        reason: FoodserviceWasteReason.overproduction,
+        loggedById: emp.id,
+      },
+    });
+  }
 
   // --- Fuel: 3 tanks per store ---
   const tankDefs: Array<{ tankNumber: number; grade: FuelGrade }> = [
@@ -420,7 +604,7 @@ async function main() {
   }
 
   console.log(
-    `Seeded ${stores.length} stores, ${users.length} users, ${vendors.length} vendors, ${products.length} products, inventory for all stores, fuel tanks, and 100 POS transactions.`
+    `Seeded ${stores.length} stores, ${users.length} users, ${vendors.length} vendors, ${products.length} products, inventory for all stores, foodservice recipes/menu, fuel tanks, and 100 POS transactions.`
   );
 }
 

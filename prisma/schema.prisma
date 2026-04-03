@@ -65,6 +65,41 @@ enum ShrinkageCategory {
   unknown
 }
 
+enum FoodserviceCategory {
+  roller_grill
+  pizza
+  chicken
+  sides
+  taquitos
+  tacos
+  beverages
+  other
+}
+
+enum FoodserviceBrand {
+  store_brand
+  hatch
+}
+
+enum FoodserviceWasteReason {
+  expired_hold
+  dropped
+  overproduction
+  quality_issue
+  other
+}
+
+enum FoodserviceHotCaseStatus {
+  active
+  sold
+  wasted
+}
+
+enum ProductionPlanStatus {
+  draft
+  confirmed
+}
+
 enum NotificationSeverity {
   info
   warning
@@ -79,12 +114,15 @@ enum NotificationCategory {
   shrinkage
   system
   fuel_tank
+  foodservice
 }
 
 model Store {
   id        String   @id
   name      String
   location  String?
+  /// When true, Hatch-branded menu items and recipes are available at this location.
+  hatchEnabled Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -100,6 +138,10 @@ model Store {
   shifts             Shift[]
   shiftTemplates     ShiftTemplate[]
   fuelDeliveries     FuelDelivery[]
+  foodserviceMenuItems   FoodserviceMenuItem[]
+  foodserviceHotCase     FoodserviceHotCaseEntry[]
+  foodserviceWasteLogs   FoodserviceWasteLog[]
+  productionPlans        ProductionPlan[]
 }
 
 model User {
@@ -131,6 +173,10 @@ model User {
   shiftTemplatesCreated  ShiftTemplate[]
   fuelDeliveriesLogged   FuelDelivery[]         @relation("FuelDeliveryLogger")
   fuelPriceChanges       FuelPriceHistory[]
+  foodserviceWasteLogs   FoodserviceWasteLog[]
+  hotCasePlaced          FoodserviceHotCaseEntry[] @relation("HotCasePlacedBy")
+  hotCaseDisposed        FoodserviceHotCaseEntry[] @relation("HotCaseDisposedBy")
+  productionPlansConfirmed ProductionPlan[]      @relation("ProductionPlanConfirmedBy")
 }
 
 /// One scheduled work block per employee per calendar day at a store (start/end as minutes from midnight; if end <= start, shift crosses midnight).
@@ -227,6 +273,7 @@ model Product {
   shrinkageRecords       ShrinkageRecord[]
   storePriceOverrides    StoreProductPriceOverride[]
   changeLogs             ProductChangeLog[]
+  recipeIngredients      RecipeIngredient[]
 
   @@index([vendorId])
 }
@@ -423,6 +470,130 @@ model FuelDailyVolumeSnapshot {
   @@index([snapshotDate])
 }
 
+model Recipe {
+  id               String               @id @default(cuid())
+  name             String
+  brand            FoodserviceBrand
+  category         FoodserviceCategory
+  instructions     String               @db.Text
+  prepTimeMinutes  Int
+  cookTimeMinutes  Int
+  cookTemperature  String?
+  yieldQuantity    Decimal              @db.Decimal(12, 3)
+  active           Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  ingredients   RecipeIngredient[]
+  menuItems     FoodserviceMenuItem[]
+}
+
+model RecipeIngredient {
+  id               String   @id @default(cuid())
+  recipeId         String
+  recipe           Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantityPerBatch Decimal  @db.Decimal(14, 4)
+  unitOfMeasure    String
+  createdAt        DateTime @default(now())
+
+  @@index([recipeId])
+  @@index([productId])
+}
+
+model FoodserviceMenuItem {
+  id               String               @id @default(cuid())
+  storeId          String
+  store            Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  itemName         String
+  category         FoodserviceCategory
+  brand            FoodserviceBrand
+  recipeId         String?
+  recipe           Recipe?              @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  retailPrice      Decimal              @db.Decimal(12, 2)
+  active           Boolean              @default(true)
+  holdTimeMinutes  Int
+  prepTimeMinutes  Int
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  hotCaseEntries   FoodserviceHotCaseEntry[]
+  wasteLogs        FoodserviceWasteLog[]
+  productionLines  ProductionPlanLine[]
+
+  @@index([storeId, active])
+}
+
+model FoodserviceHotCaseEntry {
+  id             String                   @id @default(cuid())
+  storeId        String
+  store          Store                    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  menuItemId     String
+  menuItem       FoodserviceMenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  quantityPlaced Int
+  placedAt       DateTime                 @default(now())
+  expiresAt      DateTime
+  status         FoodserviceHotCaseStatus @default(active)
+  placedById     String
+  placedBy       User                     @relation("HotCasePlacedBy", fields: [placedById], references: [id], onDelete: Cascade)
+  disposedAt     DateTime?
+  disposedById   String?
+  disposedBy     User?                    @relation("HotCaseDisposedBy", fields: [disposedById], references: [id], onDelete: SetNull)
+  wasteLogs      FoodserviceWasteLog[]
+
+  @@index([storeId, status, expiresAt])
+  @@index([menuItemId])
+}
+
+model FoodserviceWasteLog {
+  id             String                 @id @default(cuid())
+  storeId        String
+  store          Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  menuItemId     String
+  menuItem       FoodserviceMenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  quantity       Int
+  reason         FoodserviceWasteReason
+  loggedById     String
+  loggedBy       User                   @relation(fields: [loggedById], references: [id], onDelete: Cascade)
+  hotCaseEntryId String?
+  hotCaseEntry   FoodserviceHotCaseEntry? @relation(fields: [hotCaseEntryId], references: [id], onDelete: SetNull)
+  createdAt      DateTime               @default(now())
+
+  @@index([storeId, createdAt(sort: Desc)])
+  @@index([menuItemId])
+}
+
+model ProductionPlan {
+  id              String               @id @default(cuid())
+  storeId         String
+  store           Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  planDate        DateTime             @db.Date
+  status          ProductionPlanStatus @default(draft)
+  confirmedAt     DateTime?
+  confirmedById   String?
+  confirmedBy     User?                @relation("ProductionPlanConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  lines ProductionPlanLine[]
+
+  @@unique([storeId, planDate])
+}
+
+model ProductionPlanLine {
+  id                String              @id @default(cuid())
+  planId            String
+  plan              ProductionPlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  menuItemId        String
+  menuItem          FoodserviceMenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  quantitySuggested Int
+  quantityFinal     Int
+  createdAt         DateTime            @default(now())
+
+  @@index([planId])
+}
+
 model AuditLog {
   id                String   @id @default(cuid())
   storeId           String
@@ -495,5 +666,6 @@ model UserNotificationPreference {
   shrinkage     Boolean @default(true)
   system        Boolean @default(true)
   fuelTank      Boolean @default(true)
+  foodservice   Boolean @default(true)
   updatedAt     DateTime @updatedAt
 }
