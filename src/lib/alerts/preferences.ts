@@ -40,6 +40,8 @@ export function categoryAllowedByPreference(
       return prefs.reporting;
     case "compliance":
       return prefs.compliance;
+    case "cash":
+      return prefs.cash;
     default:
       return true;
   }

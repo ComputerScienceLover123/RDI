@@ -15,6 +15,7 @@ type Prefs = {
   scanData: boolean;
   reporting: boolean;
   compliance: boolean;
+  cash: boolean;
 };
 
 const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
@@ -49,6 +50,7 @@ const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
     label: "Age compliance",
     hint: "Missing age verification on restricted sales, low verification rates, and daily compliance summaries.",
   },
+  { key: "cash", label: "Cash management", hint: "Register over/short, safe count discrepancies, and daily reconciliation summaries." },
   { key: "system", label: "System", hint: "General system messages." },
 ];
 
@@ -67,6 +69,7 @@ export default function NotificationPreferencesClient() {
             scanData: typeof j.scanData === "boolean" ? j.scanData : true,
             reporting: typeof j.reporting === "boolean" ? j.reporting : true,
             compliance: typeof j.compliance === "boolean" ? j.compliance : true,
+            cash: typeof j.cash === "boolean" ? j.cash : true,
           } as Prefs);
         }
       });

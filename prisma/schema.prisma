@@ -126,6 +126,7 @@ enum NotificationCategory {
   scan_data
   reporting
   compliance
+  cash
 }
 
 /// How age was verified at POS (mock or live terminal).
@@ -152,6 +153,24 @@ enum AgeDeclinedReason {
   expired_id
   no_id_present
   other
+}
+
+enum CashRegisterStatus {
+  open
+  closed
+}
+
+enum CashDropType {
+  safe_drop
+  bank_deposit
+  change_order_received
+}
+
+enum CashCountType {
+  register_open
+  register_close
+  safe_count
+  mid_shift_count
 }
 
 /// HQ consolidated report builder (admin only).
@@ -247,6 +266,9 @@ model Store {
   lotteryDailySummaries    LotteryDailySummary[]
   scanDataSubmissions    ScanDataSubmission[]
   ageVerificationLogs    AgeVerificationLog[]
+  cashRegisters         CashRegister[]
+  cashDrops              CashDrop[]
+  cashCounts             CashCount[]
 }
 
 model User {
@@ -288,6 +310,13 @@ model User {
   hqReportTemplatesCreated HqReportTemplate[]    @relation("HqReportTemplateAuthor")
   hqGeneratedReports       HqGeneratedReport[]   @relation("HqGeneratedReportAuthor")
   ageVerificationLogs      AgeVerificationLog[]  @relation("AgeVerificationCashier")
+  cashRegistersOpened      CashRegister[]        @relation("CashRegisterOpenedBy")
+  cashRegistersClosed      CashRegister[]        @relation("CashRegisterClosedBy")
+  cashRegistersCloseVerified CashRegister[]      @relation("CashRegisterCloseVerifiedBy")
+  cashDropsEmployee        CashDrop[]            @relation("CashDropEmployee")
+  cashDropsManager         CashDrop[]            @relation("CashDropManager")
+  cashCountsCounted        CashCount[]           @relation("CashCountCountedBy")
+  cashCountsVerified       CashCount[]           @relation("CashCountVerifiedBy")
 }
 
 /// One scheduled work block per employee per calendar day at a store (start/end as minutes from midnight; if end <= start, shift crosses midnight).
@@ -511,6 +540,111 @@ model AgeVerificationLog {
   @@index([employeeId, verifiedAt])
   @@index([transactionId])
   @@index([productId])
+}
+
+/// Cash handling module: open/close registers, safe counts, and drop logging.
+model CashRegister {
+  id                     String              @id @default(cuid())
+  storeId                String
+  store                   Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  registerName           String
+  status                 CashRegisterStatus @default(open)
+
+  openedByEmployeeId    String
+  openedByEmployee      User                @relation("CashRegisterOpenedBy", fields: [openedByEmployeeId], references: [id])
+  openedAt               DateTime
+
+  closedByEmployeeId    String?
+  closedByEmployee      User?               @relation("CashRegisterClosedBy", fields: [closedByEmployeeId], references: [id])
+  closedAt               DateTime?
+
+  openingCashCountId    String?            @unique
+  openingCashCount      CashCount?        @relation("CashRegisterOpenCount", fields: [openingCashCountId], references: [id], onDelete: SetNull)
+
+  closingCashCountId    String?            @unique
+  closingCashCount      CashCount?        @relation("CashRegisterCloseCount", fields: [closingCashCountId], references: [id], onDelete: SetNull)
+
+  openingCashAmount             Decimal            @db.Decimal(12, 2)
+  currentExpectedCashAmount     Decimal            @db.Decimal(12, 2) @default(0)
+  closingCashAmount     Decimal?           @db.Decimal(12, 2)
+  expectedClosingAmount Decimal?           @db.Decimal(12, 2)
+  overShortAmount       Decimal?           @db.Decimal(12, 2)
+
+  closeVerifiedByManagerId String?
+  closeVerifiedByManager   User?           @relation("CashRegisterCloseVerifiedBy", fields: [closeVerifiedByManagerId], references: [id])
+  closeVerifiedAt          DateTime?
+
+  cashDrops              CashDrop[]
+  cashCounts             CashCount[] @relation("CashRegisterCounts")
+
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([storeId])
+  @@index([status])
+}
+
+model CashDrop {
+  id            String         @id @default(cuid())
+  storeId       String
+  store          Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  registerId    String
+  register      CashRegister   @relation(fields: [registerId], references: [id], onDelete: Cascade)
+  amountDropped Decimal        @db.Decimal(12, 2)
+  dropType      CashDropType
+
+  employeeId    String
+  employee      User           @relation("CashDropEmployee", fields: [employeeId], references: [id])
+
+  managerId     String?
+  manager       User?          @relation("CashDropManager", fields: [managerId], references: [id])
+  verified      Boolean        @default(false)
+  verifiedAt    DateTime?
+
+  droppedAt     DateTime
+  notes         String?        @db.Text
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([storeId, droppedAt])
+  @@index([registerId])
+  @@index([employeeId])
+}
+
+model CashCount {
+  id                     String          @id @default(cuid())
+  storeId                String
+  store                  Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  registerId             String?
+  register               CashRegister?   @relation("CashRegisterCounts", fields: [registerId], references: [id], onDelete: SetNull)
+
+  openingForRegister    CashRegister?   @relation("CashRegisterOpenCount")
+  closingForRegister    CashRegister?   @relation("CashRegisterCloseCount")
+
+  countType              CashCountType
+
+  totalCountedAmount    Decimal         @db.Decimal(12, 2)
+  countedByEmployeeId   String
+  countedByEmployee     User            @relation("CashCountCountedBy", fields: [countedByEmployeeId], references: [id])
+
+  verifiedByManagerId   String?
+  verifiedByManager     User?           @relation("CashCountVerifiedBy", fields: [verifiedByManagerId], references: [id])
+  verifiedAt             DateTime?
+
+  denominationBreakdown Json            @default("{}")
+  coinsTotal             Decimal         @db.Decimal(12, 2)
+  billsTotal             Decimal         @db.Decimal(12, 2)
+
+  timestamp              DateTime
+  notes                  String?        @db.Text
+
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  @@index([storeId, timestamp])
+  @@index([countType])
 }
 
 model PurchaseOrder {
@@ -941,6 +1075,7 @@ model UserNotificationPreference {
   scanData      Boolean @default(true)
   reporting     Boolean @default(true)
   compliance    Boolean @default(true)
+  cash          Boolean @default(true)
   updatedAt     DateTime @updatedAt
 }
 

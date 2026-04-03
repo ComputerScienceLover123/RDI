@@ -3,9 +3,11 @@ import { completedPeriodIfDueToday } from "@/lib/scanData/duePeriods";
 import { utcNoonFromYmd } from "@/lib/fuel/dates";
 import { endOfLocalDay, formatLocalYMD, startOfLocalDay } from "@/lib/sales/dates";
 import { getAdminUserIds } from "@/lib/alerts/recipients";
+import { Prisma } from "@prisma/client";
 import type { NotificationCategory, NotificationSeverity } from "@prisma/client";
 import { categoryAllowedByPreference, getOrCreateNotificationPreferences } from "./preferences";
 import { getManagerAdminUserIdsForStore, getManagerUserIdsForStore } from "./recipients";
+import { calcSafeExpectedBalanceBeforeTimestamp } from "@/lib/cash/calc";
 
 function mondayYmd(d: Date): string {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -603,8 +605,174 @@ export async function runAlertChecks(): Promise<AlertCheckResult> {
   created += await checkAgeRestrictedSaleGaps(log);
   created += await checkEmployeeAgeVerificationRate7d(log);
   created += await checkDailyComplianceSummary(log);
+  created += await checkCashRegisterOverShort(log);
+  created += await checkCashSafeCountMismatch(log);
+  created += await checkCashDailyReconciliationSummary(log);
   if (created === 0) log.push("no new notifications");
   return { created, log };
+}
+
+async function checkCashRegisterOverShort(log: string[]): Promise<number> {
+  // Registers verified/approved by a manager; notify based on absolute over/short.
+  let n = 0;
+  const now = new Date();
+  const start = startOfLocalDay(new Date(now));
+  start.setDate(start.getDate() - 1);
+  const end = endOfLocalDay(now);
+
+  const registers = await prisma.cashRegister.findMany({
+    where: { status: "closed", closeVerifiedAt: { not: null }, closedAt: { gte: start, lte: end } },
+    select: {
+      id: true,
+      storeId: true,
+      registerName: true,
+      overShortAmount: true,
+      closedByEmployeeId: true,
+      closeVerifiedAt: true,
+    },
+  });
+
+  for (const r of registers) {
+    const overShortAmount = r.overShortAmount ?? undefined;
+    if (!overShortAmount) continue;
+    const abs = Math.abs(overShortAmount.toNumber());
+    const severity: NotificationSeverity | null = abs > 20 ? "critical" : abs > 5 ? "warning" : null;
+    if (!severity) continue;
+
+    const recipients = await getManagerAdminUserIdsForStore(r.storeId);
+    if (recipients.length === 0) continue;
+
+    const title = `Cash register ${r.registerName}: over/short ${overShortAmount.toFixed(2)}`;
+    const desc = `Register was closed and manager-verified at ${r.closeVerifiedAt?.toISOString()}. Absolute variance is $${abs.toFixed(
+      2
+    )}.`;
+
+    const created = await notifyUsers(recipients, {
+      storeId: r.storeId,
+      title,
+      description: desc,
+      severity,
+      category: "cash",
+      linkUrl: `/store/${encodeURIComponent(r.storeId)}/cash`,
+      dedupeKeyForUser: (uid) => `cash_close_os:${r.id}:${uid}`,
+    });
+    n += created;
+  }
+
+  if (n) log.push(`cash_register_over_short: ${n} notification(s)`);
+  return n;
+}
+
+async function checkCashSafeCountMismatch(log: string[]): Promise<number> {
+  let n = 0;
+  const now = new Date();
+  const start = startOfLocalDay(new Date(now));
+  start.setDate(start.getDate() - 1);
+  const end = endOfLocalDay(now);
+
+  const safeCounts = await prisma.cashCount.findMany({
+    where: { countType: "safe_count", verifiedAt: { not: null }, timestamp: { gte: start, lte: end } },
+    select: {
+      id: true,
+      storeId: true,
+      timestamp: true,
+      totalCountedAmount: true,
+    },
+  });
+
+  for (const c of safeCounts) {
+    const expectedBefore = await calcSafeExpectedBalanceBeforeTimestamp({ storeId: c.storeId, safeCountAt: c.timestamp });
+    const mismatch = c.totalCountedAmount.sub(expectedBefore.expectedSafeBalance);
+    const abs = Math.abs(mismatch.toNumber());
+    if (abs <= 25) continue;
+
+    const recipients = await getManagerAdminUserIdsForStore(c.storeId);
+    if (recipients.length === 0) continue;
+
+    const created = await notifyUsers(recipients, {
+      storeId: c.storeId,
+      title: `Cash safe count mismatch: $${mismatch.toFixed(2)}`,
+      description: `Safe count at ${c.timestamp.toISOString()} differed from expected balance by $${abs.toFixed(
+        2
+      )} (threshold $25).`,
+      severity: "warning",
+      category: "cash",
+      linkUrl: `/store/${encodeURIComponent(c.storeId)}/cash`,
+      dedupeKeyForUser: (uid) => `cash_safe_mismatch:${c.id}:${uid}`,
+    });
+    n += created;
+  }
+
+  if (n) log.push(`cash_safe_mismatch: ${n} notification(s)`);
+  return n;
+}
+
+async function checkCashDailyReconciliationSummary(log: string[]): Promise<number> {
+  let n = 0;
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const dayStart = startOfLocalDay(y);
+  const dayEnd = endOfLocalDay(y);
+  const dayYmd = formatLocalYMD(dayStart);
+
+  const stores = await prisma.store.findMany({ select: { id: true, name: true } });
+  for (const s of stores) {
+    const registers = await prisma.cashRegister.findMany({
+      where: {
+        storeId: s.id,
+        status: "closed",
+        closeVerifiedAt: { not: null },
+        openedAt: { gte: dayStart, lte: dayEnd },
+        closedAt: { gte: dayStart, lte: dayEnd },
+      },
+      select: { overShortAmount: true },
+    });
+    if (registers.length === 0) continue;
+
+    const totalOverShort = registers.reduce((acc, r) => acc + (r.overShortAmount ? r.overShortAmount.toNumber() : 0), 0);
+
+    const safeDropsAgg = await prisma.cashDrop.aggregate({
+      where: { storeId: s.id, dropType: "safe_drop", droppedAt: { gte: dayStart, lte: dayEnd } },
+      _sum: { amountDropped: true },
+    });
+    const safeDrops = safeDropsAgg._sum.amountDropped ?? new Prisma.Decimal(0);
+
+    const lastSafeCount = await prisma.cashCount.findFirst({
+      where: { storeId: s.id, registerId: null, countType: "safe_count", timestamp: { lte: dayEnd } },
+      orderBy: { timestamp: "desc" },
+      select: { timestamp: true, totalCountedAmount: true },
+    });
+
+    let safeExpectedStr: string | null = null;
+    let safeCountedStr: string | null = null;
+    if (lastSafeCount) {
+      const expectedBefore = await calcSafeExpectedBalanceBeforeTimestamp({
+        storeId: s.id,
+        safeCountAt: lastSafeCount.timestamp,
+      });
+      safeExpectedStr = expectedBefore.expectedSafeBalance.toFixed(2);
+      safeCountedStr = lastSafeCount.totalCountedAmount.toFixed(2);
+    }
+
+    const recipients = await getManagerAdminUserIdsForStore(s.id);
+    if (recipients.length === 0) continue;
+
+    const created = await notifyUsers(recipients, {
+      storeId: s.id,
+      title: `Daily cash reconciliation — ${s.name} (${dayYmd})`,
+      description: `Verified register count: ${registers.length}. Total over/short (net): $${totalOverShort.toFixed(
+        2
+      )}. Safe drops: $${safeDrops.toFixed(2)}.${safeExpectedStr && safeCountedStr ? ` Safe expected: $${safeExpectedStr}; safe counted: $${safeCountedStr}.` : ""}`,
+      severity: "info",
+      category: "cash",
+      linkUrl: `/store/${encodeURIComponent(s.id)}/cash`,
+      dedupeKeyForUser: (uid) => `cash_daily_recon:${s.id}:${dayYmd}:${uid}`,
+    });
+    n += created;
+  }
+
+  if (n) log.push(`cash_daily_recon: ${n} notification(s)`);
+  return n;
 }
 
 async function checkAgeRestrictedSaleGaps(log: string[]): Promise<number> {

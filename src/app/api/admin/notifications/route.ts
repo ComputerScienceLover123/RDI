@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
   }
   if (
     category &&
-    ["low_stock", "void_alert", "delivery", "audit", "shrinkage", "system"].includes(category)
+    ["low_stock", "void_alert", "delivery", "audit", "shrinkage", "system", "cash"].includes(category)
   ) {
     where.category = category;
   }

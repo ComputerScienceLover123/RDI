@@ -97,6 +97,9 @@ async function main() {
   await prisma.recipeIngredient.deleteMany();
   await prisma.recipe.deleteMany();
   await prisma.ageVerificationLog.deleteMany();
+  await prisma.cashDrop.deleteMany();
+  await prisma.cashCount.deleteMany();
+  await prisma.cashRegister.deleteMany();
   await prisma.transactionLineItem.deleteMany();
   await prisma.storeProductPriceOverride.deleteMany();
   await prisma.productChangeLog.deleteMany();

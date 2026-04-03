@@ -121,6 +121,9 @@ export default function StoreDashboard(props: {
         <NavLink href={`${base}/compliance`} active={false}>
           Compliance
         </NavLink>
+        <NavLink href={`${base}/cash`} active={false}>
+          Cash
+        </NavLink>
       </nav>
 
       {panel === "home" ? (

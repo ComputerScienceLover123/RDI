@@ -20,6 +20,7 @@ const PatchSchema = z
     scanData: z.boolean().optional(),
     reporting: z.boolean().optional(),
     compliance: z.boolean().optional(),
+    cash: z.boolean().optional(),
   })
   .strict();
 
@@ -46,6 +47,7 @@ export async function GET() {
     scanData: prefs.scanData,
     reporting: prefs.reporting,
     compliance: prefs.compliance,
+    cash: prefs.cash,
   });
 }
 
@@ -83,5 +85,6 @@ export async function PATCH(req: NextRequest) {
     scanData: prefs.scanData,
     reporting: prefs.reporting,
     compliance: prefs.compliance,
+    cash: prefs.cash,
   });
 }
