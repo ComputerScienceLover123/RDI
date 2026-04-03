@@ -13,6 +13,7 @@ type Prefs = {
   foodservice: boolean;
   lottery: boolean;
   scanData: boolean;
+  reporting: boolean;
 };
 
 const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
@@ -37,6 +38,11 @@ const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
     label: "Scan data",
     hint: "Report due dates, overdue submissions, and payment received for manufacturer scan programs.",
   },
+  {
+    key: "reporting",
+    label: "HQ reports",
+    hint: "When scheduled chain reports finish generating and are ready to download.",
+  },
   { key: "system", label: "System", hint: "General system messages." },
 ];
 
@@ -53,6 +59,7 @@ export default function NotificationPreferencesClient() {
             ...j,
             lottery: typeof j.lottery === "boolean" ? j.lottery : true,
             scanData: typeof j.scanData === "boolean" ? j.scanData : true,
+            reporting: typeof j.reporting === "boolean" ? j.reporting : true,
           } as Prefs);
         }
       });

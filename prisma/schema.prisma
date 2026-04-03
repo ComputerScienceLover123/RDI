@@ -124,6 +124,40 @@ enum NotificationCategory {
   foodservice
   lottery
   scan_data
+  reporting
+}
+
+/// HQ consolidated report builder (admin only).
+enum HqReportType {
+  sales_summary
+  inventory_valuation
+  purchase_order_summary
+  labor_summary
+  fuel_performance
+  foodservice
+  lottery
+  scan_data
+  shrinkage
+}
+
+enum HqReportStoreScope {
+  all
+  subset
+  single
+}
+
+enum HqReportDatePreset {
+  last_7_days
+  last_30_days
+  last_month
+  last_quarter
+  custom_range
+}
+
+enum HqReportScheduleFrequency {
+  daily
+  weekly_monday
+  monthly_first
 }
 
 enum ScanDataPaymentFrequency {
@@ -223,6 +257,8 @@ model User {
   lotteryPacksActivated    LotteryPack[]         @relation("LotteryPackActivatedBy")
   lotterySettlements       LotterySettlement[]   @relation("LotterySettlementBy")
   scanDataSubmissions      ScanDataSubmission[]  @relation("ScanDataSubmittedBy")
+  hqReportTemplatesCreated HqReportTemplate[]    @relation("HqReportTemplateAuthor")
+  hqGeneratedReports       HqGeneratedReport[]   @relation("HqGeneratedReportAuthor")
 }
 
 /// One scheduled work block per employee per calendar day at a store (start/end as minutes from midnight; if end <= start, shift crosses midnight).
@@ -839,5 +875,60 @@ model UserNotificationPreference {
   foodservice   Boolean @default(true)
   lottery       Boolean @default(true)
   scanData      Boolean @default(true)
+  reporting     Boolean @default(true)
   updatedAt     DateTime @updatedAt
+}
+
+/// Saved HQ report configuration (rerun with rolling dates).
+model HqReportTemplate {
+  id             String              @id @default(cuid())
+  name           String
+  reportType     HqReportType
+  storeScope     HqReportStoreScope
+  /// JSON string[] of store IDs when scope is subset or single.
+  storeIds       Json
+  datePreset     HqReportDatePreset
+  customDateFrom DateTime?           @db.Date
+  customDateTo   DateTime?           @db.Date
+  createdById    String
+  createdBy      User                @relation("HqReportTemplateAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  schedules      HqReportSchedule[]
+
+  @@index([createdById])
+}
+
+model HqReportSchedule {
+  id          String                   @id @default(cuid())
+  templateId  String
+  template    HqReportTemplate         @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  frequency   HqReportScheduleFrequency
+  enabled     Boolean                  @default(true)
+  lastRunAt   DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@index([templateId])
+  @@index([enabled])
+}
+
+/// Archived generated export (CSV + PDF); deleted after retention.
+model HqGeneratedReport {
+  id             String       @id @default(cuid())
+  displayName    String
+  reportType     HqReportType
+  dateFrom       DateTime     @db.Date
+  dateTo         DateTime     @db.Date
+  storeScopeJson Json
+  generatedById  String
+  generatedBy    User         @relation("HqGeneratedReportAuthor", fields: [generatedById], references: [id], onDelete: Cascade)
+  csvRelPath     String
+  pdfRelPath     String
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+
+  @@index([generatedById])
+  @@index([expiresAt])
+  @@index([createdAt(sort: Desc)])
 }

@@ -18,6 +18,7 @@ const PatchSchema = z
     foodservice: z.boolean().optional(),
     lottery: z.boolean().optional(),
     scanData: z.boolean().optional(),
+    reporting: z.boolean().optional(),
   })
   .strict();
 
@@ -42,6 +43,7 @@ export async function GET() {
     foodservice: prefs.foodservice,
     lottery: prefs.lottery,
     scanData: prefs.scanData,
+    reporting: prefs.reporting,
   });
 }
 
@@ -77,5 +79,6 @@ export async function PATCH(req: NextRequest) {
     foodservice: prefs.foodservice,
     lottery: prefs.lottery,
     scanData: prefs.scanData,
+    reporting: prefs.reporting,
   });
 }

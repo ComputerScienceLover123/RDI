@@ -36,6 +36,8 @@ export function categoryAllowedByPreference(
       return prefs.lottery;
     case "scan_data":
       return prefs.scanData;
+    case "reporting":
+      return prefs.reporting;
     default:
       return true;
   }

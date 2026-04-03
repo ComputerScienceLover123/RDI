@@ -25,3 +25,6 @@ yarn-error.log*
 
 # Vercel
 .vercel
+
+# Generated HQ report exports (90-day retention; do not commit)
+data/hq-reports/

@@ -115,6 +115,9 @@ async function main() {
   await prisma.scanDataSubmission.deleteMany();
   await prisma.scanDataProgramProduct.deleteMany();
   await prisma.scanDataProgram.deleteMany();
+  await prisma.hqReportSchedule.deleteMany();
+  await prisma.hqGeneratedReport.deleteMany();
+  await prisma.hqReportTemplate.deleteMany();
   await prisma.product.deleteMany();
   await prisma.vendor.deleteMany();
 

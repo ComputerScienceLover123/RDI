@@ -13,10 +13,12 @@
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
+    "@types/pdfkit": "^0.17.5",
     "bcrypt": "^5.1.1",
     "jose": "^5.9.6",
     "next": "^14.2.5",
     "otplib": "^13.1.0",
+    "pdfkit": "^0.18.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^3.8.1",
