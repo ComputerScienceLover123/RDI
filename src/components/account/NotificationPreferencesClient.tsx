@@ -12,6 +12,7 @@ type Prefs = {
   fuelTank: boolean;
   foodservice: boolean;
   lottery: boolean;
+  scanData: boolean;
 };
 
 const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
@@ -31,6 +32,11 @@ const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
     label: "Lottery",
     hint: "Stale packs, large settlement variances, and high daily over/short at your store.",
   },
+  {
+    key: "scanData",
+    label: "Scan data",
+    hint: "Report due dates, overdue submissions, and payment received for manufacturer scan programs.",
+  },
   { key: "system", label: "System", hint: "General system messages." },
 ];
 
@@ -46,6 +52,7 @@ export default function NotificationPreferencesClient() {
           setPrefs({
             ...j,
             lottery: typeof j.lottery === "boolean" ? j.lottery : true,
+            scanData: typeof j.scanData === "boolean" ? j.scanData : true,
           } as Prefs);
         }
       });

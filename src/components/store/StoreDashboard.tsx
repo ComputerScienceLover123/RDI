@@ -20,6 +20,7 @@ export default function StoreDashboard(props: {
   canLogFuelDelivery: boolean;
   canHotCase: boolean;
   canViewLottery: boolean;
+  canViewScanData: boolean;
 }) {
   const {
     storeId,
@@ -30,6 +31,7 @@ export default function StoreDashboard(props: {
     canLogFuelDelivery,
     canHotCase,
     canViewLottery,
+    canViewScanData,
   } = props;
 
   const searchParams = useSearchParams();
@@ -109,6 +111,11 @@ export default function StoreDashboard(props: {
         {canViewLottery ? (
           <NavLink href={`${base}/lottery`} active={false}>
             Lottery
+          </NavLink>
+        ) : null}
+        {canViewScanData ? (
+          <NavLink href={`${base}/scan-data`} active={false}>
+            Scan data
           </NavLink>
         ) : null}
       </nav>

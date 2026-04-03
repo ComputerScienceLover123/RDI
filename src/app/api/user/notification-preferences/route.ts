@@ -17,6 +17,7 @@ const PatchSchema = z
     fuelTank: z.boolean().optional(),
     foodservice: z.boolean().optional(),
     lottery: z.boolean().optional(),
+    scanData: z.boolean().optional(),
   })
   .strict();
 
@@ -40,6 +41,7 @@ export async function GET() {
     fuelTank: prefs.fuelTank,
     foodservice: prefs.foodservice,
     lottery: prefs.lottery,
+    scanData: prefs.scanData,
   });
 }
 
@@ -74,5 +76,6 @@ export async function PATCH(req: NextRequest) {
     fuelTank: prefs.fuelTank,
     foodservice: prefs.foodservice,
     lottery: prefs.lottery,
+    scanData: prefs.scanData,
   });
 }

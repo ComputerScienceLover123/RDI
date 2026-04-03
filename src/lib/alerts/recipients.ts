@@ -1,5 +1,14 @@
 import { prisma } from "@/lib/prisma";
 
+/** Active admin user IDs (company-wide alerts). */
+export async function getAdminUserIds(): Promise<string[]> {
+  const admins = await prisma.user.findMany({
+    where: { role: "admin", accountStatus: "active" },
+    select: { id: true },
+  });
+  return admins.map((a) => a.id);
+}
+
 /** Active admins (all stores) and managers assigned to the store. */
 export async function getManagerAdminUserIdsForStore(storeId: string): Promise<string[]> {
   const [admins, managers] = await Promise.all([

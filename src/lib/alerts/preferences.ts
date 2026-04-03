@@ -34,6 +34,8 @@ export function categoryAllowedByPreference(
       return prefs.foodservice;
     case "lottery":
       return prefs.lottery;
+    case "scan_data":
+      return prefs.scanData;
     default:
       return true;
   }

@@ -112,6 +112,9 @@ async function main() {
   await prisma.lotterySettlement.deleteMany();
   await prisma.lotteryPack.deleteMany();
   await prisma.lotteryDailySummary.deleteMany();
+  await prisma.scanDataSubmission.deleteMany();
+  await prisma.scanDataProgramProduct.deleteMany();
+  await prisma.scanDataProgram.deleteMany();
   await prisma.product.deleteMany();
   await prisma.vendor.deleteMany();
 

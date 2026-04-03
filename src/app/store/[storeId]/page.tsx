@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { canLogFuelDelivery } from "@/lib/store/fuelAccess";
 import { canOperateHotCase } from "@/lib/store/foodserviceAccess";
 import { canViewLottery } from "@/lib/store/lotteryAccess";
+import { canManagerViewStoreScanData } from "@/lib/store/scanDataAccess";
 import StoreDashboard from "@/components/store/StoreDashboard";
 
 export default async function StoreDetailPage({ params }: { params: { storeId: string } }) {
@@ -31,6 +32,7 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
   const canLogFuel = canLogFuelDelivery(user, store.id);
   const canHotCase = canOperateHotCase(user, store.id);
   const showLottery = canViewLottery(user, store.id);
+  const showScanData = canManagerViewStoreScanData(user, store.id);
 
   return (
     <Suspense
@@ -47,6 +49,7 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
         canLogFuelDelivery={canLogFuel}
         canHotCase={canHotCase}
         canViewLottery={showLottery}
+        canViewScanData={showScanData}
       />
     </Suspense>
   );

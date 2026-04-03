@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { completedPeriodIfDueToday } from "@/lib/scanData/duePeriods";
 import { utcNoonFromYmd } from "@/lib/fuel/dates";
 import { endOfLocalDay, formatLocalYMD, startOfLocalDay } from "@/lib/sales/dates";
+import { getAdminUserIds } from "@/lib/alerts/recipients";
 import type { NotificationCategory, NotificationSeverity } from "@prisma/client";
 import { categoryAllowedByPreference, getOrCreateNotificationPreferences } from "./preferences";
 import { getManagerAdminUserIdsForStore, getManagerUserIdsForStore } from "./recipients";
@@ -476,6 +478,82 @@ async function checkLotteryDailyOverShort(log: string[]): Promise<number> {
   return n;
 }
 
+async function checkScanDataReportDue(log: string[]): Promise<number> {
+  let n = 0;
+  const programs = await prisma.scanDataProgram.findMany({
+    where: { status: "active" },
+  });
+  const adminIds = await getAdminUserIds();
+  if (adminIds.length === 0) return 0;
+
+  for (const p of programs) {
+    const due = completedPeriodIfDueToday(p.paymentFrequency);
+    if (!due) continue;
+    for (const uid of adminIds) {
+      const prefs = await getOrCreateNotificationPreferences(uid);
+      if (!categoryAllowedByPreference(prefs, "scan_data")) continue;
+      const dk = `scan_due:${p.id}:${due.periodKey}:${uid}`;
+      const exists = await prisma.notification.findFirst({ where: { recipientUserId: uid, dedupeKey: dk } });
+      if (exists) continue;
+      await prisma.notification.create({
+        data: {
+          storeId: null,
+          recipientUserId: uid,
+          title: `Scan data report due — ${p.programName}`,
+          description: `Submit ${p.manufacturerName} scan data for ${due.label}.`,
+          severity: "info",
+          category: "scan_data",
+          linkUrl: "/admin/scan-data",
+          dedupeKey: dk,
+        },
+      });
+      n++;
+    }
+  }
+  if (n) log.push(`scan_data_due: ${n} notification(s)`);
+  return n;
+}
+
+async function checkScanDataSubmissionOverdue(log: string[]): Promise<number> {
+  let n = 0;
+  const cutoff = startOfLocalDay(new Date());
+  cutoff.setDate(cutoff.getDate() - 7);
+
+  const overdue = await prisma.scanDataSubmission.findMany({
+    where: {
+      status: "pending",
+      reportingPeriodEnd: { lt: cutoff },
+    },
+    include: { program: { select: { programName: true } }, store: { select: { name: true } } },
+  });
+
+  const adminIds = await getAdminUserIds();
+  for (const s of overdue) {
+    for (const uid of adminIds) {
+      const prefs = await getOrCreateNotificationPreferences(uid);
+      if (!categoryAllowedByPreference(prefs, "scan_data")) continue;
+      const dk = `scan_overdue:${s.id}:${uid}`;
+      const exists = await prisma.notification.findFirst({ where: { recipientUserId: uid, dedupeKey: dk } });
+      if (exists) continue;
+      await prisma.notification.create({
+        data: {
+          storeId: s.storeId,
+          recipientUserId: uid,
+          title: `Scan data overdue — ${s.program.programName}`,
+          description: `${s.store.name}: period ending ${formatLocalYMD(s.reportingPeriodEnd)} is still pending (over 7 days).`,
+          severity: "warning",
+          category: "scan_data",
+          linkUrl: "/admin/scan-data",
+          dedupeKey: dk,
+        },
+      });
+      n++;
+    }
+  }
+  if (n) log.push(`scan_data_overdue: ${n} notification(s)`);
+  return n;
+}
+
 async function checkFoodserviceMorningPrep(log: string[]): Promise<number> {
   const hour = new Date().getHours();
   if (hour < 6 || hour > 10) return 0;
@@ -520,6 +598,8 @@ export async function runAlertChecks(): Promise<AlertCheckResult> {
   created += await checkLotteryStalePacks(log);
   created += await checkLotterySettlementOverShortCritical(log);
   created += await checkLotteryDailyOverShort(log);
+  created += await checkScanDataReportDue(log);
+  created += await checkScanDataSubmissionOverdue(log);
   if (created === 0) log.push("no new notifications");
   return { created, log };
 }

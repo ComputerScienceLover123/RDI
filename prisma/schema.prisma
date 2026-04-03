@@ -123,6 +123,37 @@ enum NotificationCategory {
   fuel_tank
   foodservice
   lottery
+  scan_data
+}
+
+enum ScanDataPaymentFrequency {
+  weekly
+  monthly
+  quarterly
+}
+
+enum ScanDataProgramStatus {
+  active
+  paused
+  expired
+}
+
+enum ScanDataRebateType {
+  per_unit
+  percentage
+}
+
+enum ScanDataSubmissionStatus {
+  pending
+  submitted
+  confirmed
+  paid
+}
+
+enum ScanDataFileFormat {
+  csv
+  xml
+  api
 }
 
 model Store {
@@ -153,6 +184,7 @@ model Store {
   lotteryPacks           LotteryPack[]
   lotterySettlements     LotterySettlement[]
   lotteryDailySummaries    LotteryDailySummary[]
+  scanDataSubmissions    ScanDataSubmission[]
 }
 
 model User {
@@ -190,6 +222,7 @@ model User {
   productionPlansConfirmed ProductionPlan[]      @relation("ProductionPlanConfirmedBy")
   lotteryPacksActivated    LotteryPack[]         @relation("LotteryPackActivatedBy")
   lotterySettlements       LotterySettlement[]   @relation("LotterySettlementBy")
+  scanDataSubmissions      ScanDataSubmission[]  @relation("ScanDataSubmittedBy")
 }
 
 /// One scheduled work block per employee per calendar day at a store (start/end as minutes from midnight; if end <= start, shift crosses midnight).
@@ -287,6 +320,7 @@ model Product {
   storePriceOverrides    StoreProductPriceOverride[]
   changeLogs             ProductChangeLog[]
   recipeIngredients      RecipeIngredient[]
+  scanDataProgramProducts ScanDataProgramProduct[]
 
   @@index([vendorId])
 }
@@ -710,6 +744,65 @@ model LotteryDailySummary {
   @@index([storeId])
 }
 
+/// Manufacturer / CPG scan rebate program (UPCs enrolled, rebate terms).
+model ScanDataProgram {
+  id                 String                   @id @default(cuid())
+  programName        String
+  manufacturerName String
+  rebateType         ScanDataRebateType
+  /// Dollars per qualifying unit, or percentage of retail (0–100) when rebateType is percentage.
+  rebateValue        Decimal                  @db.Decimal(12, 4)
+  paymentFrequency   ScanDataPaymentFrequency
+  status             ScanDataProgramStatus    @default(active)
+  contactEmail       String
+  enrollmentDate     DateTime                 @db.Date
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  products    ScanDataProgramProduct[]
+  submissions ScanDataSubmission[]
+
+  @@index([status])
+  @@index([manufacturerName])
+}
+
+model ScanDataProgramProduct {
+  programId String
+  program   ScanDataProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([programId, productId])
+  @@index([productId])
+}
+
+/// Per-store reporting period submission for a program (rebate tracking).
+model ScanDataSubmission {
+  id                           String                   @id @default(cuid())
+  storeId                      String
+  store                        Store                    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  programId                    String
+  program                      ScanDataProgram          @relation(fields: [programId], references: [id], onDelete: Cascade)
+  reportingPeriodStart         DateTime                 @db.Date
+  reportingPeriodEnd           DateTime                 @db.Date
+  totalQualifyingUnitsSold     Int
+  totalRebateValueCalculated   Decimal                  @db.Decimal(14, 2)
+  status                       ScanDataSubmissionStatus @default(pending)
+  submittedAt                  DateTime?
+  paymentReceivedAt            DateTime?                @db.Date
+  paymentAmountReceived        Decimal?                 @db.Decimal(14, 2)
+  submittedById                String?
+  submittedBy                  User?                    @relation("ScanDataSubmittedBy", fields: [submittedById], references: [id])
+  fileFormat                   ScanDataFileFormat       @default(csv)
+  createdAt                    DateTime                 @default(now())
+  updatedAt                    DateTime                 @updatedAt
+
+  @@unique([storeId, programId, reportingPeriodStart, reportingPeriodEnd])
+  @@index([programId])
+  @@index([storeId])
+  @@index([status])
+}
+
 /// In-app alert for a specific user (per-user read state).
 model Notification {
   id               String               @id @default(cuid())
@@ -745,5 +838,6 @@ model UserNotificationPreference {
   fuelTank      Boolean @default(true)
   foodservice   Boolean @default(true)
   lottery       Boolean @default(true)
+  scanData      Boolean @default(true)
   updatedAt     DateTime @updatedAt
 }
