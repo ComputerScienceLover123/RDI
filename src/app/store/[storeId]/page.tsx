@@ -1,6 +1,9 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getServerUser } from "@/lib/auth/serverUser";
 import { prisma } from "@/lib/prisma";
+import { canLogFuelDelivery } from "@/lib/store/fuelAccess";
+import { canOperateHotCase } from "@/lib/store/foodserviceAccess";
 import StoreDashboard from "@/components/store/StoreDashboard";
 
 export default async function StoreDetailPage({ params }: { params: { storeId: string } }) {
@@ -24,14 +27,24 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
       : [];
 
   const canAudit = user.role === "admin" || user.role === "manager";
+  const canLogFuel = canLogFuelDelivery(user, store.id);
+  const canHotCase = canOperateHotCase(user, store.id);
 
   return (
-    <StoreDashboard
-      storeId={store.id}
-      storeName={store.name}
-      userRole={user.role}
-      canAudit={canAudit}
-      adminStores={adminStores}
-    />
+    <Suspense
+      fallback={
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24, opacity: 0.85 }}>Loading store…</div>
+      }
+    >
+      <StoreDashboard
+        storeId={store.id}
+        storeName={store.name}
+        userRole={user.role}
+        canAudit={canAudit}
+        adminStores={adminStores}
+        canLogFuelDelivery={canLogFuel}
+        canHotCase={canHotCase}
+      />
+    </Suspense>
   );
 }
