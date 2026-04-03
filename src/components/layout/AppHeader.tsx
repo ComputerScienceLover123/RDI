@@ -256,6 +256,9 @@ export default function AppHeader({ user }: { user: HeaderUser }) {
             <Link href="/admin/foodservice" style={{ color: "#2563eb", fontSize: 14 }}>
               Foodservice (admin)
             </Link>
+            <Link href="/admin/lottery" style={{ color: "#2563eb", fontSize: 14 }}>
+              Lottery (admin)
+            </Link>
           </>
         ) : null}
         <Link href="/account/notifications" style={{ color: "#2563eb", fontSize: 14 }}>

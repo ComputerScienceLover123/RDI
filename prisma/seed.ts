@@ -109,6 +109,9 @@ async function main() {
   await prisma.fuelData.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.shrinkageRecord.deleteMany();
+  await prisma.lotterySettlement.deleteMany();
+  await prisma.lotteryPack.deleteMany();
+  await prisma.lotteryDailySummary.deleteMany();
   await prisma.product.deleteMany();
   await prisma.vendor.deleteMany();
 

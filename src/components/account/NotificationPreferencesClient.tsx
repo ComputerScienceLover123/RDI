@@ -11,6 +11,7 @@ type Prefs = {
   system: boolean;
   fuelTank: boolean;
   foodservice: boolean;
+  lottery: boolean;
 };
 
 const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
@@ -25,6 +26,11 @@ const ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
     label: "Foodservice",
     hint: "High waste vs throughput, morning production reminders, and low recipe ingredients at your store.",
   },
+  {
+    key: "lottery",
+    label: "Lottery",
+    hint: "Stale packs, large settlement variances, and high daily over/short at your store.",
+  },
   { key: "system", label: "System", hint: "General system messages." },
 ];
 
@@ -36,7 +42,12 @@ export default function NotificationPreferencesClient() {
     void fetch("/api/user/notification-preferences", { credentials: "include" })
       .then((r) => r.json())
       .then((j) => {
-        if (j && typeof j.lowStock === "boolean") setPrefs(j);
+        if (j && typeof j.lowStock === "boolean") {
+          setPrefs({
+            ...j,
+            lottery: typeof j.lottery === "boolean" ? j.lottery : true,
+          } as Prefs);
+        }
       });
   }, []);
 

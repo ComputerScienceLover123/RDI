@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { utcNoonFromYmd } from "@/lib/fuel/dates";
 import { endOfLocalDay, formatLocalYMD, startOfLocalDay } from "@/lib/sales/dates";
 import type { NotificationCategory, NotificationSeverity } from "@prisma/client";
 import { categoryAllowedByPreference, getOrCreateNotificationPreferences } from "./preferences";
@@ -394,6 +395,87 @@ async function checkFoodserviceRecipeIngredients(log: string[]): Promise<number>
   return n;
 }
 
+async function checkLotteryStalePacks(log: string[]): Promise<number> {
+  let n = 0;
+  const fourteenDaysAgo = new Date();
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+  const todayYmd = formatLocalYMD(new Date());
+  const packs = await prisma.lotteryPack.findMany({
+    where: { status: "activated", activatedAt: { lt: fourteenDaysAgo } },
+    include: { store: { select: { name: true } } },
+  });
+  for (const p of packs) {
+    const recipients = await getManagerAdminUserIdsForStore(p.storeId);
+    if (recipients.length === 0) continue;
+    const created = await notifyUsers(recipients, {
+      storeId: p.storeId,
+      title: `Lottery pack stale — ${p.store.name}`,
+      description: `Pack ${p.packNumber} (${p.gameName}) has been active over 14 days without settlement.`,
+      severity: "warning",
+      category: "lottery",
+      linkUrl: `/store/${encodeURIComponent(p.storeId)}/lottery`,
+      dedupeKeyForUser: (uid) => `lottery_stale:${p.id}:${todayYmd}:${uid}`,
+    });
+    n += created;
+  }
+  if (n) log.push(`lottery_stale: ${n} notification(s)`);
+  return n;
+}
+
+async function checkLotterySettlementOverShortCritical(log: string[]): Promise<number> {
+  let n = 0;
+  const todayStart = startOfLocalDay(new Date());
+  const todayEnd = endOfLocalDay(new Date());
+  const settlements = await prisma.lotterySettlement.findMany({
+    where: { createdAt: { gte: todayStart, lte: todayEnd } },
+    include: { store: { select: { name: true } } },
+  });
+  for (const s of settlements) {
+    if (Math.abs(Number(s.overShortAmount)) <= 20) continue;
+    const recipients = await getManagerAdminUserIdsForStore(s.storeId);
+    if (recipients.length === 0) continue;
+    const created = await notifyUsers(recipients, {
+      storeId: s.storeId,
+      title: `Lottery settlement variance — ${s.store.name}`,
+      description: `A pack settlement has over/short of $${Number(s.overShortAmount).toFixed(2)} (exceeds $20).`,
+      severity: "critical",
+      category: "lottery",
+      linkUrl: `/store/${encodeURIComponent(s.storeId)}/lottery`,
+      dedupeKeyForUser: (uid) => `lottery_os_crit:${s.id}:${uid}`,
+    });
+    n += created;
+  }
+  if (n) log.push(`lottery_settlement_os: ${n} notification(s)`);
+  return n;
+}
+
+async function checkLotteryDailyOverShort(log: string[]): Promise<number> {
+  let n = 0;
+  const todayYmd = formatLocalYMD(new Date());
+  const summaryDate = utcNoonFromYmd(todayYmd);
+  const summaries = await prisma.lotteryDailySummary.findMany({
+    where: { summaryDate },
+  });
+  for (const sum of summaries) {
+    if (Math.abs(Number(sum.totalOverShort)) <= 50) continue;
+    const store = await prisma.store.findUnique({ where: { id: sum.storeId }, select: { name: true } });
+    const recipients = await getManagerAdminUserIdsForStore(sum.storeId);
+    if (recipients.length === 0) continue;
+    const created = await notifyUsers(recipients, {
+      storeId: sum.storeId,
+      title: `Lottery daily over/short — ${store?.name ?? sum.storeId}`,
+      description: `Today's cumulative lottery over/short is $${Number(sum.totalOverShort).toFixed(2)} (threshold $50).`,
+      severity: "warning",
+      category: "lottery",
+      linkUrl: `/store/${encodeURIComponent(sum.storeId)}/lottery`,
+      dedupeKeyForUser: (uid) => `lottery_daily_os:${sum.storeId}:${todayYmd}:${uid}`,
+    });
+    n += created;
+  }
+  if (n) log.push(`lottery_daily_os: ${n} notification(s)`);
+  return n;
+}
+
 async function checkFoodserviceMorningPrep(log: string[]): Promise<number> {
   const hour = new Date().getHours();
   if (hour < 6 || hour > 10) return 0;
@@ -435,6 +517,9 @@ export async function runAlertChecks(): Promise<AlertCheckResult> {
   created += await checkFoodserviceWasteRatio(log);
   created += await checkFoodserviceRecipeIngredients(log);
   created += await checkFoodserviceMorningPrep(log);
+  created += await checkLotteryStalePacks(log);
+  created += await checkLotterySettlementOverShortCritical(log);
+  created += await checkLotteryDailyOverShort(log);
   if (created === 0) log.push("no new notifications");
   return { created, log };
 }

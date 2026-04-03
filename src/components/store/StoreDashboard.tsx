@@ -19,6 +19,7 @@ export default function StoreDashboard(props: {
   adminStores: StoreOption[];
   canLogFuelDelivery: boolean;
   canHotCase: boolean;
+  canViewLottery: boolean;
 }) {
   const {
     storeId,
@@ -28,6 +29,7 @@ export default function StoreDashboard(props: {
     adminStores,
     canLogFuelDelivery,
     canHotCase,
+    canViewLottery,
   } = props;
 
   const searchParams = useSearchParams();
@@ -104,6 +106,11 @@ export default function StoreDashboard(props: {
         <NavLink href={`${base}/foodservice`} active={false}>
           Foodservice
         </NavLink>
+        {canViewLottery ? (
+          <NavLink href={`${base}/lottery`} active={false}>
+            Lottery
+          </NavLink>
+        ) : null}
       </nav>
 
       {panel === "home" ? (
@@ -112,6 +119,7 @@ export default function StoreDashboard(props: {
           userRole={userRole}
           canLogFuelDelivery={canLogFuelDelivery}
           canHotCase={canHotCase}
+          canViewLottery={canViewLottery}
         />
       ) : (
         <InventoryManagement storeId={storeId} userRole={userRole} canAudit={canAudit} />

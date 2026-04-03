@@ -31,13 +31,20 @@ type KpiPayload = {
   unreadNotificationsCount: number;
 };
 
+type LotteryToday = {
+  todayPacksActivated: number;
+  todayPacksSettled: number;
+  todayTotalOverShort: number;
+};
+
 export default function StoreHomeDashboard(props: {
   storeId: string;
   userRole: UserRole;
   canLogFuelDelivery: boolean;
   canHotCase: boolean;
+  canViewLottery: boolean;
 }) {
-  const { storeId, userRole, canLogFuelDelivery, canHotCase } = props;
+  const { storeId, userRole, canLogFuelDelivery, canHotCase, canViewLottery } = props;
   const router = useRouter();
   const base = `/store/${encodeURIComponent(storeId)}`;
   const api = `/api/store/${encodeURIComponent(storeId)}/home`;
@@ -72,6 +79,9 @@ export default function StoreHomeDashboard(props: {
     Array<{ id: string; kind: string; title: string; detail: string; actorName: string; at: string; linkUrl: string }>
   >([]);
   const [activityLoad, setActivityLoad] = useState(!isEmployee);
+
+  const [lottery, setLottery] = useState<LotteryToday | null>(null);
+  const [lotteryLoad, setLotteryLoad] = useState(!isEmployee && canViewLottery);
 
   const [emp, setEmp] = useState<{
     scheduleSnapshot: {
@@ -114,7 +124,12 @@ export default function StoreHomeDashboard(props: {
     void run(`${api}/schedule`, (d) => setSched(d as typeof sched), setSchedLoad);
     void run(`${api}/sales-hourly`, (d) => setHourly((d as { points: typeof hourly }).points ?? []), setHourlyLoad);
     void run(`${api}/activity`, (d) => setActivity((d as { feed: typeof activity }).feed ?? []), setActivityLoad);
-  }, [api, isEmployee, run]);
+    if (canViewLottery) {
+      void run(`${api}/lottery-summary`, (d) => setLottery(d as LotteryToday), setLotteryLoad);
+    } else {
+      setLotteryLoad(false);
+    }
+  }, [api, canViewLottery, isEmployee, run]);
 
   useEffect(() => {
     const id = "store-home-pulse";
@@ -259,6 +274,38 @@ export default function StoreHomeDashboard(props: {
         </div>
       </section>
 
+      {canViewLottery ? (
+        <section>
+          <h2 style={{ fontSize: 18, marginBottom: 8 }}>Lottery today</h2>
+          {lotteryLoad || !lottery ? (
+            <Skeleton h={72} />
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                gap: 12,
+                marginBottom: 8,
+              }}
+            >
+              <KpiCard label="Packs activated" value={String(lottery.todayPacksActivated)} sub="Today" />
+              <KpiCard label="Packs settled" value={String(lottery.todayPacksSettled)} sub="Today" />
+              <KpiCard
+                label="Over / short (today)"
+                value={`$${lottery.todayTotalOverShort.toFixed(2)}`}
+                sub={Math.abs(lottery.todayTotalOverShort) > 50 ? "Above $50 threshold" : "Settled packs"}
+              />
+            </div>
+          )}
+          <Link
+            href={`${base}/lottery`}
+            style={{ fontWeight: 600, color: "#2563eb", fontSize: 14, textDecoration: "none" }}
+          >
+            Open lottery module →
+          </Link>
+        </section>
+      ) : null}
+
       <section>
         <h2 style={{ fontSize: 18, marginBottom: 8 }}>Alerts</h2>
         {alertsLoad ? (
@@ -350,6 +397,7 @@ export default function StoreHomeDashboard(props: {
           <ActionLink href={`${base}/ordering/new`} label="Create purchase order" />
           {canLogFuelDelivery ? <ActionLink href={`${base}/fuel`} label="Log fuel delivery" /> : null}
           {canHotCase ? <ActionLink href={`${base}/foodservice`} label="Place items in hot case" /> : null}
+          {canViewLottery ? <ActionLink href={`${base}/lottery`} label="Lottery packs" /> : null}
           <ActionLink href={`${base}/schedule`} label="View today’s schedule" />
         </div>
       </section>

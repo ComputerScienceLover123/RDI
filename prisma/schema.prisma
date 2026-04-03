@@ -100,6 +100,13 @@ enum ProductionPlanStatus {
   confirmed
 }
 
+enum LotteryPackStatus {
+  inventory
+  activated
+  settled
+  returned
+}
+
 enum NotificationSeverity {
   info
   warning
@@ -115,6 +122,7 @@ enum NotificationCategory {
   system
   fuel_tank
   foodservice
+  lottery
 }
 
 model Store {
@@ -142,6 +150,9 @@ model Store {
   foodserviceHotCase     FoodserviceHotCaseEntry[]
   foodserviceWasteLogs   FoodserviceWasteLog[]
   productionPlans        ProductionPlan[]
+  lotteryPacks           LotteryPack[]
+  lotterySettlements     LotterySettlement[]
+  lotteryDailySummaries    LotteryDailySummary[]
 }
 
 model User {
@@ -177,6 +188,8 @@ model User {
   hotCasePlaced          FoodserviceHotCaseEntry[] @relation("HotCasePlacedBy")
   hotCaseDisposed        FoodserviceHotCaseEntry[] @relation("HotCaseDisposedBy")
   productionPlansConfirmed ProductionPlan[]      @relation("ProductionPlanConfirmedBy")
+  lotteryPacksActivated    LotteryPack[]         @relation("LotteryPackActivatedBy")
+  lotterySettlements       LotterySettlement[]   @relation("LotterySettlementBy")
 }
 
 /// One scheduled work block per employee per calendar day at a store (start/end as minutes from midnight; if end <= start, shift crosses midnight).
@@ -633,6 +646,70 @@ model ShrinkageRecord {
   @@index([productId])
 }
 
+model LotteryPack {
+  id                 String            @id @default(cuid())
+  storeId            String
+  store              Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  gameName           String
+  packNumber         String
+  ticketCountPerPack Int
+  ticketPrice        Decimal           @db.Decimal(10, 2)
+  status             LotteryPackStatus @default(inventory)
+  activatedAt        DateTime?
+  settledAt          DateTime?
+  activatedById      String?
+  activatedBy        User?             @relation("LotteryPackActivatedBy", fields: [activatedById], references: [id], onDelete: SetNull)
+  settlements        LotterySettlement[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@unique([storeId, packNumber])
+  @@index([storeId, status])
+}
+
+model LotterySettlement {
+  id                    String      @id @default(cuid())
+  storeId               String
+  store                 Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  packId                String
+  pack                  LotteryPack   @relation(fields: [packId], references: [id], onDelete: Cascade)
+  gameName              String
+  totalTicketsInPack    Int
+  ticketsSoldCount      Int
+  ticketsRemainingCount Int
+  expectedRevenue       Decimal       @db.Decimal(12, 2)
+  actualCashCollected   Decimal       @db.Decimal(12, 2)
+  overShortAmount       Decimal       @db.Decimal(12, 2)
+  settledById           String
+  settledBy             User          @relation("LotterySettlementBy", fields: [settledById], references: [id], onDelete: Cascade)
+  settlementDate        DateTime      @db.Date
+  notes                 String?       @db.Text
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@unique([packId])
+  @@index([storeId, settlementDate])
+}
+
+model LotteryDailySummary {
+  id                          String   @id @default(cuid())
+  storeId                     String
+  store                       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  summaryDate                 DateTime @db.Date
+  totalPacksActivated         Int      @default(0)
+  totalPacksSettled           Int      @default(0)
+  totalExpectedRevenueSettled Decimal  @default(0) @db.Decimal(14, 2)
+  totalActualCollected        Decimal  @default(0) @db.Decimal(14, 2)
+  totalOverShort              Decimal  @default(0) @db.Decimal(14, 2)
+  instantTicketSalesPos       Decimal? @db.Decimal(14, 2)
+  onlineLotterySalesTotal     Decimal? @db.Decimal(14, 2)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@unique([storeId, summaryDate])
+  @@index([storeId])
+}
+
 /// In-app alert for a specific user (per-user read state).
 model Notification {
   id               String               @id @default(cuid())
@@ -667,5 +744,6 @@ model UserNotificationPreference {
   system        Boolean @default(true)
   fuelTank      Boolean @default(true)
   foodservice   Boolean @default(true)
+  lottery       Boolean @default(true)
   updatedAt     DateTime @updatedAt
 }

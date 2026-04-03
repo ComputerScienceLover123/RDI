@@ -16,6 +16,7 @@ const PatchSchema = z
     system: z.boolean().optional(),
     fuelTank: z.boolean().optional(),
     foodservice: z.boolean().optional(),
+    lottery: z.boolean().optional(),
   })
   .strict();
 
@@ -38,6 +39,7 @@ export async function GET() {
     system: prefs.system,
     fuelTank: prefs.fuelTank,
     foodservice: prefs.foodservice,
+    lottery: prefs.lottery,
   });
 }
 
@@ -71,5 +73,6 @@ export async function PATCH(req: NextRequest) {
     system: prefs.system,
     fuelTank: prefs.fuelTank,
     foodservice: prefs.foodservice,
+    lottery: prefs.lottery,
   });
 }

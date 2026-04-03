@@ -4,6 +4,7 @@ import { getServerUser } from "@/lib/auth/serverUser";
 import { prisma } from "@/lib/prisma";
 import { canLogFuelDelivery } from "@/lib/store/fuelAccess";
 import { canOperateHotCase } from "@/lib/store/foodserviceAccess";
+import { canViewLottery } from "@/lib/store/lotteryAccess";
 import StoreDashboard from "@/components/store/StoreDashboard";
 
 export default async function StoreDetailPage({ params }: { params: { storeId: string } }) {
@@ -29,6 +30,7 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
   const canAudit = user.role === "admin" || user.role === "manager";
   const canLogFuel = canLogFuelDelivery(user, store.id);
   const canHotCase = canOperateHotCase(user, store.id);
+  const showLottery = canViewLottery(user, store.id);
 
   return (
     <Suspense
@@ -44,6 +46,7 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
         adminStores={adminStores}
         canLogFuelDelivery={canLogFuel}
         canHotCase={canHotCase}
+        canViewLottery={showLottery}
       />
     </Suspense>
   );
